@@ -249,9 +249,15 @@ export function Canvas({ stress }: { stress: boolean }) {
   const onDelete = useCallback(
     ({ nodes: n, edges: e }: { nodes: Node[]; edges: Edge[] }) => {
       const ids = new Set([...n.map((x) => x.id), ...e.map((x) => x.id)]);
-      if (ids.size > 0) commit((b) => removeItems(b, ids));
+      if (ids.size === 0) return;
+      commit((b) => removeItems(b, ids));
+      // React Flow sends "remove", not "deselect"; drop ids that no longer exist
+      // (including edges removed together with their nodes).
+      const { workspace, activeBoardId, selectedIds } = useBoardStore.getState();
+      const present = new Set(workspace.boards[activeBoardId]?.items.map((i) => i.id));
+      setSelection(selectedIds.filter((id) => present.has(id)));
     },
-    [commit],
+    [commit, setSelection],
   );
 
   if (!board) return null;

@@ -11,13 +11,28 @@ import { seedWorkspace, stressBoard } from "./model/seed";
 import { parseWorkspace, serializeBoard, serializeManifest } from "./model/serialize";
 import type { Workspace } from "./model/types";
 import { formatVersion } from "./model/types";
-import { readRecovery, writeRecovery } from "./platform/storage";
+import {
+  clearRecovery,
+  isDesktop,
+  readLastDir,
+  readRecovery,
+  readWorkspaceAt,
+  type WorkspaceOrigin,
+  writeRecovery,
+} from "./platform/storage";
 import { useBoardStore } from "./state/boardStore";
 
 const stressCount = Number(new URLSearchParams(window.location.search).get("stress") ?? 0);
 
+interface Startup {
+  workspace: Workspace;
+  origin: WorkspaceOrigin | null;
+  saved: boolean;
+  notice?: string;
+}
+
 /** Recovery data goes through the same parser as files, so a bad copy is never loaded blindly. */
-function validRecovery(): { workspace: Workspace; dir: string | null } | null {
+function validRecovery(): Startup | null {
   const recovery = readRecovery();
   if (!recovery) return null;
   try {
@@ -26,14 +41,21 @@ function validRecovery(): { workspace: Workspace; dir: string | null } | null {
     );
     return {
       workspace: parseWorkspace(serializeManifest(recovery.workspace.manifest), boards),
-      dir: recovery.dir,
+      // The stored fingerprint lets the next save notice if the folder changed meanwhile.
+      origin: recovery.origin,
+      saved: false,
+      notice: "Kaydedilmemiş değişiklikler kurtarıldı. Kaydetmeyi unutma.",
     };
   } catch {
     return null;
   }
 }
 
-function initialWorkspace(): { workspace: Workspace; dir: string | null } {
+/**
+ * Startup order: unsaved edits from a crash first (kept dirty, never written silently),
+ * then the last folder from disk, then the example workspace.
+ */
+async function initialWorkspace(): Promise<Startup> {
   if (stressCount > 0) {
     const board = stressBoard(stressCount);
     return {
@@ -45,10 +67,22 @@ function initialWorkspace(): { workspace: Workspace; dir: string | null } {
         },
         boards: { [board.id]: board },
       },
-      dir: null,
+      origin: null,
+      saved: true,
     };
   }
-  return validRecovery() ?? { workspace: seedWorkspace(), dir: null };
+  const recovered = validRecovery();
+  if (recovered) return recovered;
+  const lastDir = isDesktop ? readLastDir() : null;
+  if (lastDir) {
+    try {
+      const { workspace, origin } = await readWorkspaceAt(lastDir);
+      return { workspace, origin, saved: true };
+    } catch {
+      // Folder moved or broken: fall back to the example instead of failing to start.
+    }
+  }
+  return { workspace: seedWorkspace(), origin: null, saved: true };
 }
 
 function isTyping(target: EventTarget | null): boolean {
@@ -95,10 +129,21 @@ function useRecoveryAutosave(enabled: boolean) {
   useEffect(() => {
     if (!enabled) return;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    // Only unsaved edits are mirrored; loading or saving a workspace never writes a copy.
     const unsubscribe = useBoardStore.subscribe((state, previous) => {
-      if (state.workspace === previous.workspace) return;
+      if (
+        state.workspace === previous.workspace &&
+        state.savedWorkspace === previous.savedWorkspace
+      ) {
+        return;
+      }
       clearTimeout(timer);
-      timer = setTimeout(() => writeRecovery(state.workspace, state.workspaceDir), 800);
+      if (state.workspace === state.savedWorkspace) return;
+      timer = setTimeout(() => {
+        const latest = useBoardStore.getState();
+        if (latest.workspace === latest.savedWorkspace) clearRecovery();
+        else writeRecovery(latest.workspace, latest.origin);
+      }, 800);
     });
     return () => {
       clearTimeout(timer);
@@ -111,9 +156,17 @@ export default function App() {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    const { workspace, dir } = initialWorkspace();
-    useBoardStore.getState().loadWorkspace(workspace, dir);
-    setReady(true);
+    let cancelled = false;
+    void initialWorkspace().then(({ workspace, origin, saved, notice }) => {
+      if (cancelled) return;
+      const store = useBoardStore.getState();
+      store.loadWorkspace(workspace, origin, saved);
+      if (notice) store.showToast(notice);
+      setReady(true);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useShortcuts();

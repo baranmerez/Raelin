@@ -39,24 +39,73 @@ export function serializeManifest(manifest: WorkspaceManifest): string {
 
 export class FormatError extends Error {}
 
-const itemKinds = new Set(["flowNode", "note", "region", "stroke", "edge"]);
+function parseJson(text: string, what: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new FormatError(`${what} geçerli JSON değil.`);
+  }
+}
+
+const isNum = (v: unknown) => typeof v === "number" && Number.isFinite(v);
+const isStr = (v: unknown) => typeof v === "string";
+const tones = new Set(["lilac", "peach", "periwinkle", "sage", "butter", "paper"]);
+const shapes = new Set(["terminal", "process", "decision"]);
+
+/** Field-level checks so a hand-edited or badly merged file fails here, not during render. */
+function itemProblem(item: BoardItem): string | null {
+  if (!item || typeof item !== "object" || !isStr(item.id)) return "kimlik eksik";
+  if (item.kind === "edge") {
+    if (!isStr(item.source) || !isStr(item.target)) return "bağlantı uçları eksik";
+    if (item.style !== "flow" && item.style !== "reference") return "bağlantı türü geçersiz";
+    return null;
+  }
+  if (!isNum(item.x) || !isNum(item.y) || !isNum(item.width) || item.width <= 0) {
+    return "konum veya boyut geçersiz";
+  }
+  switch (item.kind) {
+    case "flowNode":
+      if (!shapes.has(item.shape) || !isStr(item.text) || !tones.has(item.tone))
+        return "akış alanları geçersiz";
+      return isNum(item.height) && item.height > 0 ? null : "yükseklik geçersiz";
+    case "note":
+      if (!isStr(item.title) || !tones.has(item.tone)) return "not alanları geçersiz";
+      return item.content?.type === "doc" ? null : "not içeriği geçersiz";
+    case "region":
+      if (!isStr(item.title) || !tones.has(item.tone)) return "bölge alanları geçersiz";
+      return isNum(item.height) && item.height > 0 ? null : "yükseklik geçersiz";
+    case "stroke": {
+      const pointsOk =
+        Array.isArray(item.points) &&
+        item.points.every((p) => Array.isArray(p) && p.length === 3 && p.every(isNum));
+      if (!pointsOk || !isStr(item.color) || !isNum(item.size)) return "çizim noktaları geçersiz";
+      return isNum(item.height) && item.height > 0 ? null : "yükseklik geçersiz";
+    }
+    default:
+      return `bilinmeyen öğe türü: ${String((item as { kind?: unknown }).kind)}`;
+  }
+}
 
 export function parseBoard(text: string): BoardDoc {
-  const data = JSON.parse(text) as BoardDoc;
-  if (data.formatVersion !== formatVersion) {
-    throw new FormatError(`Desteklenmeyen pano biçimi: ${String(data.formatVersion)}`);
+  const data = parseJson(text, "Pano dosyası") as BoardDoc;
+  if (data?.formatVersion !== formatVersion) {
+    throw new FormatError(`Desteklenmeyen pano biçimi: ${String(data?.formatVersion)}`);
   }
-  if (!isSafeId(data.id) || !Array.isArray(data.items)) {
+  if (!isSafeId(data.id) || !Array.isArray(data.items) || !isStr(data.title)) {
     throw new FormatError("Pano dosyası eksik veya bozuk.");
   }
+  const nodeIds = new Set<string>();
   const ids = new Set<string>();
   for (const item of data.items as BoardItem[]) {
-    if (!itemKinds.has(item.kind)) throw new FormatError(`Bilinmeyen öğe türü: ${item.kind}`);
+    const problem = itemProblem(item);
+    if (problem) throw new FormatError(`Öğe ${String(item?.id)}: ${problem}`);
     if (ids.has(item.id)) throw new FormatError(`Tekrarlanan öğe kimliği: ${item.id}`);
     ids.add(item.id);
+    if (item.kind !== "edge") nodeIds.add(item.id);
   }
   for (const item of data.items) {
-    if (item.kind === "edge" && (!ids.has(item.source) || !ids.has(item.target))) {
+    // Edges must connect two nodes; an edge pointing at another edge is invalid too.
+    if (item.kind === "edge" && (!nodeIds.has(item.source) || !nodeIds.has(item.target))) {
       throw new FormatError(`Bağlantı olmayan bir öğeyi gösteriyor: ${item.id}`);
     }
   }
@@ -64,8 +113,8 @@ export function parseBoard(text: string): BoardDoc {
 }
 
 export function parseManifest(text: string): WorkspaceManifest {
-  const data = JSON.parse(text) as WorkspaceManifest;
-  if (data.formatVersion !== formatVersion || !Array.isArray(data.boards)) {
+  const data = parseJson(text, "raelin.json") as WorkspaceManifest;
+  if (data?.formatVersion !== formatVersion || !Array.isArray(data.boards)) {
     throw new FormatError("raelin.json eksik veya desteklenmeyen sürümde.");
   }
   for (const board of data.boards) {

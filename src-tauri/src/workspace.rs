@@ -87,6 +87,17 @@ pub fn read_workspace(dir: String) -> Result<WorkspaceFiles, String> {
     Ok(WorkspaceFiles { manifest, boards })
 }
 
+/// Like `read_workspace`, but a folder without `raelin.json` is `None` instead of an
+/// error, so the UI can tell "empty folder" from "another workspace is here".
+#[tauri::command]
+pub fn probe_workspace(dir: String) -> Result<Option<WorkspaceFiles>, String> {
+    let root = workspace_dir(&dir)?;
+    if !root.join(MANIFEST).exists() {
+        return Ok(None);
+    }
+    read_workspace(dir).map(Some)
+}
+
 /// Writes the manifest and the listed boards. Board files that are no longer
 /// listed are left on disk on purpose; nothing is deleted implicitly.
 #[tauri::command]

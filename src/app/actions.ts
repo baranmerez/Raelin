@@ -2,6 +2,7 @@ import { boardToMarkdown } from "../model/markdown";
 import { FormatError } from "../model/serialize";
 import {
   clearRecovery,
+  confirmAction,
   isDesktop,
   openWorkspace,
   saveMarkdownFile,
@@ -15,17 +16,22 @@ function errorText(error: unknown): string {
   return String(error);
 }
 
+export function isDirty(): boolean {
+  const { workspace, savedWorkspace } = useBoardStore.getState();
+  return workspace !== savedWorkspace;
+}
+
 export async function saveNow(): Promise<void> {
-  const { workspace, workspaceDir, setWorkspaceDir, showToast } = useBoardStore.getState();
+  const { workspace, origin, markSaved, showToast } = useBoardStore.getState();
   if (!isDesktop) {
     showToast("Tarayıcıda yalnız kurtarma kopyası tutuluyor; klasöre kaydetme masaüstünde.");
     return;
   }
   try {
-    const dir = await saveWorkspace(workspace, workspaceDir);
-    if (!dir) return;
-    setWorkspaceDir(dir);
-    clearRecovery();
+    const saved = await saveWorkspace(workspace, origin);
+    if (!saved) return;
+    markSaved(saved, workspace);
+    if (!isDirty()) clearRecovery();
     showToast("Çalışma alanı kaydedildi.");
   } catch (error) {
     showToast(`Kaydedilemedi: ${errorText(error)}`, "error");
@@ -34,10 +40,17 @@ export async function saveNow(): Promise<void> {
 
 export async function openNow(): Promise<void> {
   const { loadWorkspace, showToast } = useBoardStore.getState();
+  if (
+    isDirty() &&
+    !(await confirmAction("Kaydedilmemiş değişiklikler kaybolacak. Yine de açılsın mı?"))
+  ) {
+    return;
+  }
   try {
     const result = await openWorkspace();
     if (!result) return;
-    loadWorkspace(result.workspace, result.dir);
+    loadWorkspace(result.workspace, result.origin, true);
+    clearRecovery();
     showToast("Çalışma alanı açıldı.");
   } catch (error) {
     showToast(`Açılamadı: ${errorText(error)}`, "error");
@@ -47,7 +60,9 @@ export async function openNow(): Promise<void> {
 function currentMarkdown(): { markdown: string; title: string; scoped: boolean } {
   const { workspace, activeBoardId, selectedIds } = useBoardStore.getState();
   const board = workspace.boards[activeBoardId];
-  const selected = new Set(selectedIds);
+  // Only ids that still exist count as a selection.
+  const present = new Set(board.items.map((i) => i.id));
+  const selected = new Set(selectedIds.filter((id) => present.has(id)));
   return {
     markdown: boardToMarkdown(board, selected),
     title: board.title,

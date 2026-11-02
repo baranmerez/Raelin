@@ -3,5 +3,5 @@
   "identifier": "default",
   "description": "Main window: open/save dialogs only; file I/O goes through the app's own workspace commands",
   "windows": ["main"],
-  "permissions": ["core:default", "dialog:allow-open", "dialog:allow-save"]
+  "permissions": ["core:default", "dialog:allow-open", "dialog:allow-save", "dialog:allow-ask"]
 }

@@ -37,7 +37,8 @@ export function TopBar() {
   const boardTitle = useBoardStore((s) => s.workspace.boards[s.activeBoardId]?.title);
   const background = useBoardStore((s) => s.workspace.boards[s.activeBoardId]?.background);
   const title = useBoardStore((s) => s.workspace.manifest.title);
-  const workspaceDir = useBoardStore((s) => s.workspaceDir);
+  const workspaceDir = useBoardStore((s) => s.origin?.dir ?? null);
+  const dirty = useBoardStore((s) => s.workspace !== s.savedWorkspace);
   const canUndo = useBoardStore((s) => (s.history[s.activeBoardId]?.past.length ?? 0) > 0);
   const canRedo = useBoardStore((s) => (s.history[s.activeBoardId]?.future.length ?? 0) > 0);
   const undo = useBoardStore((s) => s.undo);
@@ -60,6 +61,11 @@ export function TopBar() {
       <span className="board-crumb" title={workspaceDir ?? "Henüz kaydedilmedi"}>
         {boardTitle}
       </span>
+      {dirty && (
+        <span className="dirty-dot" role="status" title="Kaydedilmemiş değişiklikler var">
+          Kaydedilmedi
+        </span>
+      )}
 
       <div className="top-spacer" />
 

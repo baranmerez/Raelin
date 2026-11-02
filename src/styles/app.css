@@ -144,6 +144,23 @@ button {
   color: var(--ink);
 }
 
+.dirty-dot {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 6px;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+.dirty-dot::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--coral);
+}
+
 .top-spacer {
   flex: 1;
 }

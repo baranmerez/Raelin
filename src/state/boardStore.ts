@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { emptyBoard } from "../model/factory";
 import type { BoardDoc, BoardItem, Workspace } from "../model/types";
+import type { WorkspaceOrigin } from "../platform/storage";
 
 export type Tool = "select" | "pen" | "process" | "decision" | "terminal" | "note" | "region";
 
@@ -26,7 +27,10 @@ interface BoardState {
   tool: Tool;
   penColor: string;
   penSize: number;
-  workspaceDir: string | null;
+  /** Folder and on-disk fingerprint of the open workspace; null until first save/open. */
+  origin: WorkspaceOrigin | null;
+  /** Workspace object as last saved or opened; anything else means unsaved edits. */
+  savedWorkspace: Workspace | null;
   toast: Toast | null;
 
   setTool: (tool: Tool) => void;
@@ -42,8 +46,9 @@ interface BoardState {
   endGesture: () => void;
   undo: () => void;
   redo: () => void;
-  loadWorkspace: (workspace: Workspace, dir: string | null) => void;
-  setWorkspaceDir: (dir: string) => void;
+  loadWorkspace: (workspace: Workspace, origin: WorkspaceOrigin | null, saved: boolean) => void;
+  /** written is the workspace object that was serialized; edits made during the save stay dirty. */
+  markSaved: (origin: WorkspaceOrigin, written: Workspace) => void;
   showToast: (text: string, tone?: Toast["tone"]) => void;
 }
 
@@ -66,7 +71,8 @@ export const useBoardStore = create<BoardState>()((set, get) => ({
   tool: "select",
   penColor: "#3f5f9e",
   penSize: 5,
-  workspaceDir: null,
+  origin: null,
+  savedWorkspace: null,
   toast: null,
 
   setTool: (tool) => set({ tool }),
@@ -94,6 +100,7 @@ export const useBoardStore = create<BoardState>()((set, get) => ({
         },
         activeBoardId: board.id,
         selectedIds: [],
+        gesture: null,
       };
     }),
 
@@ -106,6 +113,9 @@ export const useBoardStore = create<BoardState>()((set, get) => ({
       return {
         workspace: { ...s.workspace, boards: { ...s.workspace.boards, [board.id]: next } },
         history: { ...s.history, [board.id]: pushPast(s.history[board.id], board) },
+        // A commit inside a gesture (e.g. renaming while a note is open) closes the
+        // current step; later live updates of the same gesture form a new one.
+        gesture: s.gesture ? { base: next, pushed: false } : null,
       };
     }),
 
@@ -122,7 +132,10 @@ export const useBoardStore = create<BoardState>()((set, get) => ({
       const patch: Partial<BoardState> = {
         workspace: { ...s.workspace, boards: { ...s.workspace.boards, [board.id]: next } },
       };
-      if (s.gesture && !s.gesture.pushed) {
+      if (!s.gesture) {
+        // Live change without a gesture (e.g. arrow-key nudges): its own undo step.
+        patch.history = { ...s.history, [board.id]: pushPast(s.history[board.id], board) };
+      } else if (!s.gesture.pushed) {
         patch.history = { ...s.history, [board.id]: pushPast(s.history[board.id], s.gesture.base) };
         patch.gesture = { ...s.gesture, pushed: true };
       }
@@ -146,6 +159,7 @@ export const useBoardStore = create<BoardState>()((set, get) => ({
           },
         },
         selectedIds: [],
+        gesture: null,
       };
     }),
   redo: () =>
@@ -164,10 +178,11 @@ export const useBoardStore = create<BoardState>()((set, get) => ({
           },
         },
         selectedIds: [],
+        gesture: null,
       };
     }),
 
-  loadWorkspace: (workspace, dir) => {
+  loadWorkspace: (workspace, origin, saved) => {
     const first =
       workspace.manifest.boards.find((b) => b.title.startsWith("Akış")) ??
       workspace.manifest.boards[0];
@@ -177,10 +192,11 @@ export const useBoardStore = create<BoardState>()((set, get) => ({
       history: Object.fromEntries(Object.keys(workspace.boards).map((id) => [id, emptyHistory()])),
       gesture: null,
       selectedIds: [],
-      workspaceDir: dir,
+      origin,
+      savedWorkspace: saved ? workspace : null,
     });
   },
-  setWorkspaceDir: (dir) => set({ workspaceDir: dir }),
+  markSaved: (origin, written) => set({ origin, savedWorkspace: written }),
   showToast: (text, tone = "ok") => set({ toast: { id: Date.now(), text, tone } }),
 }));
 

@@ -41,6 +41,24 @@ describe("serialize", () => {
     expect(() => parseBoard(serializeBoard(board))).toThrow(FormatError);
   });
 
+  it("rejects malformed items before they reach rendering", () => {
+    const board = emptyBoard("Test");
+    const note = makeNote(0, 0, "Not");
+    const text = serializeBoard({ ...board, items: [note] });
+    const broken = text.replace('"content"', '"contentX"');
+    expect(() => parseBoard(broken)).toThrow(FormatError);
+    expect(() => parseBoard("{ not json")).toThrow(FormatError);
+  });
+
+  it("rejects an edge whose endpoint is another edge", () => {
+    const board = emptyBoard("Test");
+    const a = makeFlowNode("process", 0, 0, "A");
+    const b = makeFlowNode("process", 0, 100, "B");
+    const first = makeEdge(a.id, b.id);
+    board.items = [a, b, first, makeEdge(first.id, b.id)];
+    expect(() => parseBoard(serializeBoard(board))).toThrow(FormatError);
+  });
+
   it("rejects unsafe board ids", () => {
     const board = { ...emptyBoard("Test"), id: "../outside" };
     expect(() => parseBoard(serializeBoard(board))).toThrow(FormatError);
