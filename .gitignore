@@ -1,0 +1,25 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# Build output
+node_modules
+dist
+dist-ssr
+*.tsbuildinfo
+
+# Local-only notes and settings
+*.local
+*.local.md
+
+# Raelin derived index inside sample workspaces
+.raelin/
+
+# Editors and OS
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.sw?
