@@ -1,5 +1,5 @@
 import { Handle, type Node, type NodeProps, Position } from "@xyflow/react";
-import { type CSSProperties, useEffect, useRef, useState } from "react";
+import { type CSSProperties, memo, useEffect, useRef, useState } from "react";
 import { tones } from "../../model/tones";
 import type { FlowNodeItem } from "../../model/types";
 import { patchItem, useBoardStore } from "../../state/boardStore";
@@ -107,7 +107,7 @@ export function InlineText({
   );
 }
 
-export function FlowNodeView({ data, selected }: NodeProps<FlowRfNode>) {
+export const FlowNodeView = memo(function FlowNodeView({ data, selected }: NodeProps<FlowRfNode>) {
   const { item } = data;
   const commit = useBoardStore((s) => s.commit);
   const rename = (text: string) => commit((b) => patchItem<FlowNodeItem>(b, item.id, { text }));
@@ -124,6 +124,8 @@ export function FlowNodeView({ data, selected }: NodeProps<FlowRfNode>) {
           preserveAspectRatio="none"
           aria-hidden="true"
         >
+          {/* Offset copy instead of a CSS drop-shadow filter, which is costly to repaint. */}
+          <polygon className="decision-shadow" points="50,6 98,54 50,102 2,54" />
           <polygon points="50,2 98,50 50,98 2,50" vectorEffect="non-scaling-stroke" />
         </svg>
       )}
@@ -131,4 +133,4 @@ export function FlowNodeView({ data, selected }: NodeProps<FlowRfNode>) {
       <SideHandles />
     </div>
   );
-}
+});

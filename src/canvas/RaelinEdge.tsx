@@ -7,13 +7,13 @@ import {
   getSmoothStepPath,
   getStraightPath,
 } from "@xyflow/react";
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import type { ConnectorType, EdgeItem } from "../model/types";
 import { patchItem, useBoardStore } from "../state/boardStore";
 
 export type RaelinRfEdge = Edge<{ item: EdgeItem; connector: ConnectorType }, "raelin">;
 
-export function RaelinEdge(props: EdgeProps<RaelinRfEdge>) {
+export const RaelinEdge = memo(function RaelinEdge(props: EdgeProps<RaelinRfEdge>) {
   const {
     id,
     sourceX,
@@ -113,4 +113,4 @@ export function RaelinEdge(props: EdgeProps<RaelinRfEdge>) {
       </EdgeLabelRenderer>
     </>
   );
-}
+});

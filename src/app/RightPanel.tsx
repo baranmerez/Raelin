@@ -1,4 +1,5 @@
 import { AnimatePresence, motion } from "motion/react";
+import { useShallow } from "zustand/react/shallow";
 import { shapeSize } from "../model/factory";
 import { penColors, toneOrder, tones } from "../model/tones";
 import type {
@@ -9,7 +10,7 @@ import type {
   FlowStyle,
   ToneName,
 } from "../model/types";
-import { mapItems, useActiveBoard, useBoardStore } from "../state/boardStore";
+import { mapItems, useBoardStore } from "../state/boardStore";
 
 const flowStyles: { id: FlowStyle; label: string }[] = [
   { id: "pastel", label: "Pastel" },
@@ -51,27 +52,73 @@ function StylePreview({ style }: { style: FlowStyle }) {
   );
 }
 
+interface PanelSummary {
+  flowStyle: FlowStyle;
+  connector: ConnectorType;
+  tonableCount: number;
+  tone: ToneName | null;
+  flowCount: number;
+  shape: FlowShape | "mixed" | null;
+  edgeCount: number;
+  edgeStyle: EdgeItem["style"] | "mixed" | null;
+}
+
+function merge<T>(current: T | "mixed" | null, value: T): T | "mixed" {
+  return current === null || current === value ? value : "mixed";
+}
+
+/**
+ * Only the primitives the panel shows. With a shallow comparison the panel stays
+ * still while nodes are dragged, because positions are not part of the summary.
+ */
+function summarize(state: ReturnType<typeof useBoardStore.getState>): PanelSummary | null {
+  const board = state.workspace.boards[state.activeBoardId];
+  if (!board) return null;
+  const summary: PanelSummary = {
+    flowStyle: board.flowStyle,
+    connector: board.connector,
+    tonableCount: 0,
+    tone: null,
+    flowCount: 0,
+    shape: null,
+    edgeCount: 0,
+    edgeStyle: null,
+  };
+  if (state.selectedIds.length === 0) return summary;
+  const selected = new Set(state.selectedIds);
+  for (const item of board.items) {
+    if (!selected.has(item.id)) continue;
+    if (item.kind === "edge") {
+      summary.edgeCount++;
+      summary.edgeStyle = merge(summary.edgeStyle, item.style);
+      continue;
+    }
+    if (item.kind === "stroke") continue;
+    summary.tonableCount++;
+    summary.tone ??= item.tone;
+    if (item.kind === "flowNode") {
+      summary.flowCount++;
+      summary.shape = merge(summary.shape, item.shape);
+    }
+  }
+  return summary;
+}
+
 export function RightPanel() {
-  const board = useActiveBoard();
-  const selectedIds = useBoardStore((s) => s.selectedIds);
+  const summary = useBoardStore(useShallow(summarize));
   const tool = useBoardStore((s) => s.tool);
   const penColor = useBoardStore((s) => s.penColor);
   const penSize = useBoardStore((s) => s.penSize);
   const setPen = useBoardStore((s) => s.setPen);
   const commit = useBoardStore((s) => s.commit);
-  if (!board) return null;
+  if (!summary) return null;
 
-  const selected = new Set(selectedIds);
-  const selectedItems = board.items.filter((i) => selected.has(i.id));
-  const tonable = selectedItems.filter(
-    (i) => i.kind === "flowNode" || i.kind === "note" || i.kind === "region",
-  );
-  const flowNodes = selectedItems.filter((i) => i.kind === "flowNode");
-  const edges = selectedItems.filter((i): i is EdgeItem => i.kind === "edge");
-  const currentTone = tonable[0] && "tone" in tonable[0] ? tonable[0].tone : null;
+  const currentTone = summary.tone;
 
-  const applyToSelection = (fn: (item: BoardItem) => BoardItem) =>
+  const applyToSelection = (fn: (item: BoardItem) => BoardItem) => {
+    const selected = new Set(useBoardStore.getState().selectedIds);
     commit((b) => mapItems(b, (item) => (selected.has(item.id) ? fn(item) : item)));
+  };
 
   const setTone = (tone: ToneName) =>
     applyToSelection((item) =>
@@ -104,9 +151,9 @@ export function RightPanel() {
             <button
               key={s.id}
               type="button"
-              className={`style-card${board.flowStyle === s.id ? " is-active" : ""}`}
+              className={`style-card${summary.flowStyle === s.id ? " is-active" : ""}`}
               onClick={() => commit((b) => (b.flowStyle === s.id ? b : { ...b, flowStyle: s.id }))}
-              aria-pressed={board.flowStyle === s.id}
+              aria-pressed={summary.flowStyle === s.id}
             >
               <StylePreview style={s.id} />
               <span>{s.label}</span>
@@ -116,7 +163,7 @@ export function RightPanel() {
       </section>
 
       <AnimatePresence initial={false}>
-        {tonable.length > 0 && (
+        {summary.tonableCount > 0 && (
           <motion.section
             key="tone"
             className="panel-section"
@@ -141,7 +188,7 @@ export function RightPanel() {
             </div>
           </motion.section>
         )}
-        {flowNodes.length > 0 && (
+        {summary.flowCount > 0 && (
           <motion.section
             key="shape"
             className="panel-section"
@@ -156,11 +203,7 @@ export function RightPanel() {
                 <button
                   key={s.id}
                   type="button"
-                  className={
-                    flowNodes.every((n) => n.kind === "flowNode" && n.shape === s.id)
-                      ? "is-active"
-                      : ""
-                  }
+                  className={summary.shape === s.id ? "is-active" : ""}
                   onClick={() => setShape(s.id)}
                 >
                   {s.label}
@@ -169,7 +212,7 @@ export function RightPanel() {
             </div>
           </motion.section>
         )}
-        {edges.length > 0 && (
+        {summary.edgeCount > 0 && (
           <motion.section
             key="edge"
             className="panel-section"
@@ -184,7 +227,7 @@ export function RightPanel() {
                 <button
                   key={style}
                   type="button"
-                  className={edges.every((e) => e.style === style) ? "is-active" : ""}
+                  className={summary.edgeStyle === style ? "is-active" : ""}
                   onClick={() =>
                     applyToSelection((item) =>
                       item.kind === "edge" && item.style !== style ? { ...item, style } : item,
@@ -242,7 +285,7 @@ export function RightPanel() {
             <button
               key={c.id}
               type="button"
-              className={board.connector === c.id ? "is-active" : ""}
+              className={summary.connector === c.id ? "is-active" : ""}
               onClick={() => commit((b) => (b.connector === c.id ? b : { ...b, connector: c.id }))}
             >
               {c.label}

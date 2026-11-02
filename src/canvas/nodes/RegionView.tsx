@@ -1,11 +1,12 @@
 import { type Node, type NodeProps, NodeResizer } from "@xyflow/react";
+import { memo } from "react";
 import type { RegionItem } from "../../model/types";
 import { patchItem, useBoardStore } from "../../state/boardStore";
 import { InlineText, toneStyle } from "./FlowNodeView";
 
 export type RegionRfNode = Node<{ item: RegionItem }, "region">;
 
-export function RegionView({ data, selected }: NodeProps<RegionRfNode>) {
+export const RegionView = memo(function RegionView({ data, selected }: NodeProps<RegionRfNode>) {
   const { item } = data;
   const commit = useBoardStore((s) => s.commit);
   const beginGesture = useBoardStore((s) => s.beginGesture);
@@ -41,4 +42,4 @@ export function RegionView({ data, selected }: NodeProps<RegionRfNode>) {
       </div>
     </div>
   );
-}
+});

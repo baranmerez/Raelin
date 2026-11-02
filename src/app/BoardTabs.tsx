@@ -1,4 +1,5 @@
 import { motion } from "motion/react";
+import { useShallow } from "zustand/react/shallow";
 import { useBoardStore } from "../state/boardStore";
 import { Icon } from "../ui/Icon";
 
@@ -6,7 +7,11 @@ const tabTones = ["lilac", "peach", "sage", "periwinkle", "butter"];
 
 export function BoardTabs() {
   const boards = useBoardStore((s) => s.workspace.manifest.boards);
-  const titles = useBoardStore((s) => s.workspace.boards);
+  const titles = useBoardStore(
+    useShallow((s) =>
+      s.workspace.manifest.boards.map((b) => s.workspace.boards[b.id]?.title ?? b.title),
+    ),
+  );
   const activeId = useBoardStore((s) => s.activeBoardId);
   const selectBoard = useBoardStore((s) => s.selectBoard);
   const addBoard = useBoardStore((s) => s.addBoard);
@@ -30,7 +35,7 @@ export function BoardTabs() {
                 transition={{ type: "spring", bounce: 0.2, duration: 0.4 }}
               />
             )}
-            <span className="tab-label">{titles[board.id]?.title ?? board.title}</span>
+            <span className="tab-label">{titles[index]}</span>
           </button>
         );
       })}

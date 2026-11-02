@@ -2,7 +2,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import type { BackgroundKind } from "../model/types";
 import { isDesktop } from "../platform/storage";
-import { useActiveBoard, useBoardStore } from "../state/boardStore";
+import { useBoardStore } from "../state/boardStore";
 import { Icon } from "../ui/Icon";
 import { copyMarkdown, openNow, saveMarkdown, saveNow } from "./actions";
 
@@ -33,7 +33,9 @@ const menuMotion = {
 };
 
 export function TopBar() {
-  const board = useActiveBoard();
+  // Narrow selectors: the top bar must not re-render on every drag frame.
+  const boardTitle = useBoardStore((s) => s.workspace.boards[s.activeBoardId]?.title);
+  const background = useBoardStore((s) => s.workspace.boards[s.activeBoardId]?.background);
   const title = useBoardStore((s) => s.workspace.manifest.title);
   const workspaceDir = useBoardStore((s) => s.workspaceDir);
   const canUndo = useBoardStore((s) => (s.history[s.activeBoardId]?.past.length ?? 0) > 0);
@@ -56,7 +58,7 @@ export function TopBar() {
       <h1 className="workspace-title">{title}</h1>
       <Icon name="chevron" size={16} />
       <span className="board-crumb" title={workspaceDir ?? "Henüz kaydedilmedi"}>
-        {board?.title}
+        {boardTitle}
       </span>
 
       <div className="top-spacer" />
@@ -89,7 +91,7 @@ export function TopBar() {
           aria-expanded={themeOpen}
         >
           <Icon name="palette" />
-          Zemin · {board ? backgroundLabel[board.background] : ""}
+          Zemin · {background ? backgroundLabel[background] : ""}
           <Icon name="chevron" size={16} />
         </button>
         <AnimatePresence>
@@ -99,7 +101,7 @@ export function TopBar() {
                 <button
                   key={kind}
                   type="button"
-                  className={`menu-item${board?.background === kind ? " is-checked" : ""}`}
+                  className={`menu-item${background === kind ? " is-checked" : ""}`}
                   onClick={() => {
                     commit((b) => (b.background === kind ? b : { ...b, background: kind }));
                     setThemeOpen(false);

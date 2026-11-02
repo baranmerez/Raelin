@@ -11,11 +11,12 @@ import {
   type NodeChange,
   ReactFlow,
   SelectionMode,
+  useStore,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { makeEdge } from "../model/factory";
-import type { BoardDoc, NodeItem } from "../model/types";
+import type { BoardDoc, ConnectorType, EdgeItem, NodeItem } from "../model/types";
 import { isEdgeItem, isNodeItem } from "../model/types";
 import { mapItems, removeItems, useActiveBoard, useBoardStore } from "../state/boardStore";
 import { BottomBar } from "./BottomBar";
@@ -39,17 +40,13 @@ const inkColor = "#5b3a9e";
 
 type Size = { width: number; height: number };
 
-function toRfNode(
-  item: NodeItem,
-  selected: ReadonlySet<string>,
-  measured: Record<string, Size>,
-): Node {
+function toRfNode(item: NodeItem, selected: boolean, size: Size | undefined): Node {
   const base = {
     id: item.id,
     position: { x: item.x, y: item.y },
-    selected: selected.has(item.id),
+    selected,
     data: { item },
-    measured: measured[item.id],
+    measured: size,
   };
   switch (item.kind) {
     case "flowNode":
@@ -77,34 +74,87 @@ function toRfNode(
   }
 }
 
+function toRfEdge(item: EdgeItem, selected: boolean, connector: ConnectorType): Edge {
+  return {
+    id: item.id,
+    source: item.source,
+    target: item.target,
+    sourceHandle: item.sourceHandle ?? null,
+    targetHandle: item.targetHandle ?? null,
+    type: "raelin",
+    selected,
+    data: { item, connector },
+    markerEnd: {
+      type: MarkerType.ArrowClosed,
+      color: item.style === "reference" ? "#8e6bd1" : inkColor,
+      width: 16,
+      height: 16,
+    },
+  };
+}
+
+interface NodeEntry {
+  item: NodeItem;
+  selected: boolean;
+  size: Size | undefined;
+  node: Node;
+}
+
+interface EdgeEntry {
+  item: EdgeItem;
+  selected: boolean;
+  connector: ConnectorType;
+  edge: Edge;
+}
+
+/**
+ * Maps board items to React Flow objects, reusing the previous object whenever its
+ * inputs are unchanged. React Flow skips re-rendering nodes whose object is identical,
+ * so a drag only re-renders the dragged node instead of the whole board.
+ */
 function useRfGraph(
   board: BoardDoc | undefined,
   selectedIds: string[],
   measured: Record<string, Size>,
 ) {
+  const nodeCache = useRef(new Map<string, NodeEntry>());
+  const edgeCache = useRef(new Map<string, EdgeEntry>());
   return useMemo(() => {
     if (!board) return { nodes: [] as Node[], edges: [] as Edge[] };
     const selected = new Set(selectedIds);
     const nodeItems = board.items.filter(isNodeItem);
     // Regions render first so they stay behind everything else.
     nodeItems.sort((a, b) => Number(b.kind === "region") - Number(a.kind === "region"));
-    const nodes = nodeItems.map((item) => toRfNode(item, selected, measured));
-    const edges: Edge[] = board.items.filter(isEdgeItem).map((item) => ({
-      id: item.id,
-      source: item.source,
-      target: item.target,
-      sourceHandle: item.sourceHandle ?? null,
-      targetHandle: item.targetHandle ?? null,
-      type: "raelin",
-      selected: selected.has(item.id),
-      data: { item, connector: board.connector },
-      markerEnd: {
-        type: MarkerType.ArrowClosed,
-        color: item.style === "reference" ? "#8e6bd1" : inkColor,
-        width: 16,
-        height: 16,
-      },
-    }));
+
+    const nextNodes = new Map<string, NodeEntry>();
+    const nodes = nodeItems.map((item) => {
+      const isSelected = selected.has(item.id);
+      const size = measured[item.id];
+      const cached = nodeCache.current.get(item.id);
+      const node =
+        cached && cached.item === item && cached.selected === isSelected && cached.size === size
+          ? cached.node
+          : toRfNode(item, isSelected, size);
+      nextNodes.set(item.id, { item, selected: isSelected, size, node });
+      return node;
+    });
+    nodeCache.current = nextNodes;
+
+    const nextEdges = new Map<string, EdgeEntry>();
+    const edges = board.items.filter(isEdgeItem).map((item) => {
+      const isSelected = selected.has(item.id);
+      const cached = edgeCache.current.get(item.id);
+      const edge =
+        cached &&
+        cached.item === item &&
+        cached.selected === isSelected &&
+        cached.connector === board.connector
+          ? cached.edge
+          : toRfEdge(item, isSelected, board.connector);
+      nextEdges.set(item.id, { item, selected: isSelected, connector: board.connector, edge });
+      return edge;
+    });
+    edgeCache.current = nextEdges;
     return { nodes, edges };
   }, [board, selectedIds, measured]);
 }
@@ -119,6 +169,8 @@ export function Canvas({ stress }: { stress: boolean }) {
   const endGesture = useBoardStore((s) => s.endGesture);
   const setSelection = useBoardStore((s) => s.setSelection);
   const [measured, setMeasured] = useState<Record<string, Size>>({});
+  // Boolean selector: re-renders only when crossing the threshold, not on every zoom frame.
+  const far = useStore((s) => s.transform[2] < 0.5);
   const { nodes, edges } = useRfGraph(board, selectedIds, measured);
 
   /** Controlled mode: selection arrives as "select" changes and must be written back. */
@@ -206,7 +258,7 @@ export function Canvas({ stress }: { stress: boolean }) {
   const many = board.items.length > 300;
 
   return (
-    <div className={`canvas flow-style-${board.flowStyle}`} data-tool={tool}>
+    <div className={`canvas flow-style-${board.flowStyle}${far ? " is-far" : ""}`} data-tool={tool}>
       <ReactFlow
         // A fresh instance per board gives each board its own initial fit.
         key={board.id}

@@ -84,8 +84,7 @@ button {
   gap: 10px;
   padding: 0 18px 0 22px;
   border-bottom: 1px solid var(--line);
-  background: rgba(251, 248, 244, 0.9);
-  backdrop-filter: blur(8px);
+  background: var(--paper);
   z-index: 5;
 }
 
@@ -764,12 +763,39 @@ kbd {
   width: 100%;
   height: 100%;
   overflow: visible;
-  filter: drop-shadow(0 8px 10px rgba(70, 48, 110, 0.14));
 }
 
-.flow-style-line .decision-shape,
-.flow-style-flat .decision-shape {
-  filter: none;
+.decision-shape polygon.decision-shadow {
+  fill: rgba(70, 48, 110, 0.08);
+  stroke: none;
+}
+
+.flow-style-line .decision-shadow,
+.flow-style-flat .decision-shadow,
+.is-far .decision-shadow {
+  display: none;
+}
+
+/* Far zoom: drop shadows and hover effects, which dominate paint cost with many nodes. */
+.is-far .shape-terminal,
+.is-far .shape-process,
+.is-far .note-card {
+  box-shadow: none;
+  transition: none;
+}
+
+.is-far .side-handle,
+.is-far .edge-label.is-empty {
+  display: none;
+}
+
+.note-static {
+  cursor: text;
+  border-radius: 6px;
+}
+
+.note-static:hover {
+  background: rgba(255, 255, 255, 0.35);
 }
 
 .decision-shape polygon {
@@ -1119,7 +1145,6 @@ kbd {
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.94);
   box-shadow: var(--shadow-lg);
-  backdrop-filter: blur(6px);
 }
 
 .bottom-bar .tool-button {
