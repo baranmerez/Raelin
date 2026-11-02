@@ -13,7 +13,6 @@ import type { Workspace } from "./model/types";
 import { formatVersion } from "./model/types";
 import {
   clearRecovery,
-  isDesktop,
   readLastDir,
   readRecovery,
   readWorkspaceAt,
@@ -73,7 +72,7 @@ async function initialWorkspace(): Promise<Startup> {
   }
   const recovered = validRecovery();
   if (recovered) return recovered;
-  const lastDir = isDesktop ? readLastDir() : null;
+  const lastDir = await readLastDir();
   if (lastDir) {
     try {
       const { workspace, origin } = await readWorkspaceAt(lastDir);

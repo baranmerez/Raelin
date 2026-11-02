@@ -1,5 +1,5 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
-import { ask, open, save } from "@tauri-apps/plugin-dialog";
+import { ask } from "@tauri-apps/plugin-dialog";
 import { parseWorkspace, serializeBoard, serializeManifest } from "../model/serialize";
 import type { Workspace } from "../model/types";
 
@@ -60,15 +60,18 @@ export async function saveWorkspace(
   origin: WorkspaceOrigin | null,
 ): Promise<WorkspaceOrigin | null> {
   if (!isDesktop) throw new Error("Klasöre kaydetme yalnız masaüstü uygulamasında çalışır.");
-  const dir =
-    origin?.dir ?? (await open({ directory: true, title: "Çalışma alanı klasörünü seç" }));
-  if (typeof dir !== "string") return null;
+  // A remembered folder is reused only while Rust still holds it on its allowlist.
+  const known =
+    origin && (await invoke<boolean>("is_dir_allowed", { dir: origin.dir })) ? origin : null;
+  const dir = known?.dir ?? (await pickWorkspaceDir("Çalışma alanı klasörünü seç"));
+  if (!dir) return null;
 
   const onDisk = await invoke<WorkspaceFiles | null>("probe_workspace", { dir });
   if (onDisk) {
-    const known = origin?.dir === dir ? origin.fingerprint : null;
-    if (fingerprintFiles(onDisk) !== known) {
-      const message = known
+    // Re-picking the remembered folder still compares against what we last saw there.
+    const expected = origin?.dir === dir ? origin.fingerprint : null;
+    if (fingerprintFiles(onDisk) !== expected) {
+      const message = expected
         ? "Klasördeki dosyalar Raelin dışında değişmiş (ör. git pull). Üzerine yazılsın mı?"
         : "Bu klasörde zaten bir çalışma alanı var. Üzerine yazılsın mı?";
       if (!(await confirmAction(message))) return null;
@@ -77,7 +80,6 @@ export async function saveWorkspace(
 
   const files = toFiles(workspace);
   await invoke("write_workspace", { dir, manifest: files.manifest, boards: files.boards });
-  rememberLastDir(dir);
   return { dir, fingerprint: fingerprintFiles(files) };
 }
 
@@ -86,7 +88,6 @@ export async function readWorkspaceAt(
 ): Promise<{ workspace: Workspace; origin: WorkspaceOrigin }> {
   const files = await invoke<WorkspaceFiles>("read_workspace", { dir });
   const boards = Object.fromEntries(files.boards.map((b) => [b.id, b.content]));
-  rememberLastDir(dir);
   return {
     workspace: parseWorkspace(files.manifest, boards),
     origin: { dir, fingerprint: fingerprintFiles(files) },
@@ -98,8 +99,8 @@ export async function openWorkspace(): Promise<{
   origin: WorkspaceOrigin;
 } | null> {
   if (!isDesktop) throw new Error("Klasör açma yalnız masaüstü uygulamasında çalışır.");
-  const dir = await open({ directory: true, title: "Çalışma alanı klasörünü aç" });
-  if (typeof dir !== "string") return null;
+  const dir = await pickWorkspaceDir("Çalışma alanı klasörünü aç");
+  if (!dir) return null;
   return readWorkspaceAt(dir);
 }
 
@@ -112,17 +113,13 @@ export async function saveMarkdownFile(markdown: string, suggestedName: string):
     URL.revokeObjectURL(url);
     return true;
   }
-  const path = await save({
-    defaultPath: fileName,
-    filters: [{ name: "Markdown", extensions: ["md"] }],
-  });
+  const path = await invoke<string | null>("pick_markdown_file", { defaultName: fileName });
   if (!path) return false;
   await invoke("write_markdown", { path, content: markdown });
   return true;
 }
 
 const recoveryKey = "raelin.recovery.v1";
-const lastDirKey = "raelin.lastDir";
 
 interface Recovery {
   workspace: Workspace;
@@ -162,17 +159,16 @@ export function clearRecovery(): void {
   }
 }
 
-function rememberLastDir(dir: string): void {
-  try {
-    localStorage.setItem(lastDirKey, dir);
-  } catch {
-    // ignore
-  }
+/** Native folder picker in Rust; the picked folder joins Rust's allowlist for this run. */
+async function pickWorkspaceDir(title: string): Promise<string | null> {
+  return invoke<string | null>("pick_workspace_dir", { title });
 }
 
-export function readLastDir(): string | null {
+/** Last folder Raelin itself read or wrote (stored by Rust, not by the page). */
+export async function readLastDir(): Promise<string | null> {
+  if (!isDesktop) return null;
   try {
-    return localStorage.getItem(lastDirKey);
+    return await invoke<string | null>("last_workspace_dir");
   } catch {
     return null;
   }
