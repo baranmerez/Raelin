@@ -9,7 +9,10 @@
     "lineWidth": 100
   },
   "linter": {
-    "rules": { "recommended": true }
+    "rules": {
+      "preset": "recommended",
+      "style": { "noDescendingSpecificity": "off" }
+    }
   },
   "javascript": {
     "formatter": { "quoteStyle": "double" }

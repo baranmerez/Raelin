@@ -23,3 +23,6 @@ dist-ssr
 .DS_Store
 *.suo
 *.sw?
+
+# Local agent tooling
+.claude/
