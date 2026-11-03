@@ -44,7 +44,7 @@ export function TopBar() {
       </span>
       {dirty && (
         <span className="dirty-dot" role="status" title="Kaydedilmemiş değişiklikler var">
-          Kaydedilmedi
+          <span className="collapsible-label">Kaydedilmedi</span>
         </span>
       )}
 
@@ -76,9 +76,12 @@ export function TopBar() {
           className="ghost-button"
           onClick={() => setThemeOpen((o) => !o)}
           aria-expanded={themeOpen}
+          title="Zemin"
         >
           <Icon name="palette" />
-          Zemin · {background ? backgroundLabel[background] : ""}
+          <span className="collapsible-label">
+            Zemin · {background ? backgroundLabel[background] : ""}
+          </span>
           <Icon name="chevron" size={16} />
         </button>
         <AnimatePresence>

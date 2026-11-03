@@ -75,6 +75,7 @@ button {
 .app {
   display: grid;
   grid-template-rows: 64px auto 1fr;
+  grid-template-columns: minmax(0, 1fr);
   height: 100%;
 }
 
@@ -129,6 +130,7 @@ button {
 
 .workspace-title {
   margin: 0;
+  white-space: nowrap;
   font-size: 24px;
   font-weight: 700;
   letter-spacing: -0.01em;
@@ -140,12 +142,18 @@ button {
 }
 
 .board-crumb {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   font-size: 18px;
   color: var(--ink);
 }
 
 .dirty-dot {
   display: inline-flex;
+  flex-shrink: 0;
+  white-space: nowrap;
   align-items: center;
   gap: 6px;
   margin-left: 6px;
@@ -348,7 +356,9 @@ button {
 
 .board-tab {
   position: relative;
-  min-width: 140px;
+  flex: 0 1 auto;
+  min-width: 72px;
+  max-width: 240px;
   height: 40px;
   padding: 0 26px;
   border: 1px solid transparent;
@@ -409,6 +419,20 @@ button {
 
 .tab-label {
   position: relative;
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Many tabs shrink instead of running off screen; the wrapper must be able to shrink too. */
+.board-tabs > .menu-anchor {
+  display: flex;
+  min-width: 0;
+}
+
+.board-tabs > .menu-anchor > .board-tab {
+  width: 100%;
 }
 
 .board-tab-add {
@@ -705,6 +729,7 @@ kbd {
 /* ---------- Canvas ---------- */
 
 .canvas {
+  container: canvas / inline-size;
   position: relative;
   min-width: 0;
   background: var(--paper);
@@ -1250,6 +1275,13 @@ kbd {
   border-radius: 50%;
 }
 
+/* A narrow canvas has no room beside the centred bottom bar: lift zoom above it. */
+@container canvas (max-width: 960px) {
+  .zoom-control.react-flow__panel {
+    margin-bottom: 96px;
+  }
+}
+
 .zoom-value {
   min-width: 58px;
   height: 36px;
@@ -1423,4 +1455,11 @@ kbd {
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Ccircle cx='12' cy='12' r='10' fill='%23ffffff88' stroke='%23b4473a' stroke-width='1.5'/%3E%3C/svg%3E")
     12 12,
     cell;
+}
+
+/* Narrow windows: secondary labels collapse to their icon so the bar never overflows. */
+@media (max-width: 1240px) {
+  .collapsible-label {
+    display: none;
+  }
 }
