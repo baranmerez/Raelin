@@ -94,6 +94,7 @@ function nameOf(item: NodeItem | undefined): string {
   if (!item) return "?";
   if (item.kind === "flowNode") return item.text || "(adsız adım)";
   if (item.kind === "note" || item.kind === "region") return item.title || "(adsız)";
+  if (item.kind === "image") return item.alt || "resim";
   return "serbest çizim";
 }
 
@@ -149,6 +150,11 @@ function groupSection(
     const body = noteToMarkdown(note.content);
     if (body) lines.push(body, "");
   }
+  for (const image of members) {
+    if (image.kind !== "image") continue;
+    // Relative to the workspace folder, where the picture is stored.
+    lines.push(`![${image.alt || "resim"}](assets/${image.src})`, "");
+  }
   return lines;
 }
 
@@ -167,7 +173,9 @@ export function boardToMarkdown(board: BoardDoc, selectedIds?: ReadonlySet<strin
   const regions = nodes
     .filter((n): n is RegionItem => n.kind === "region")
     .sort((a, b) => a.y - b.y || a.x - b.x);
-  const content = nodes.filter((n) => n.kind === "flowNode" || n.kind === "note");
+  const content = nodes.filter(
+    (n) => n.kind === "flowNode" || n.kind === "note" || n.kind === "image",
+  );
   const placed = new Set<string>();
   for (const region of regions) {
     const members = content.filter((n) => !placed.has(n.id) && inside(region, n));

@@ -225,6 +225,11 @@ export function applyOps(board: BoardDoc, ops: readonly Op[]): ApplyResult {
             shape,
             ...resized,
           };
+        } else if (item.kind === "image") {
+          if (op.text !== undefined || op.shape !== undefined || op.markdown !== undefined) {
+            warnings.push(`${op.id}: resimde yalnız title (alt metin) değişir.`);
+          }
+          next = { ...item, alt: op.title ?? item.alt };
         } else {
           if (op.text !== undefined || op.shape !== undefined) {
             warnings.push(`${op.id}: not ve bölgede title, markdown ve tone kullanılır.`);

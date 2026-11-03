@@ -1,5 +1,6 @@
-//! Workspace folder I/O. Layout: `raelin.json` manifest plus `boards/<id>.json`.
-//! Board ids are restricted to [a-z0-9-] so they can never escape the folder.
+//! Workspace folder I/O. Layout: `raelin.json` manifest, `boards/<id>.json` and pictures
+//! in `assets/<id>.<ext>`. Board ids and asset names are restricted to [a-z0-9-] (plus a
+//! known image extension) so they can never escape the folder.
 //!
 //! The WebView never hands us a path we trust: folders and Markdown files are picked
 //! in native dialogs opened from Rust, and only those picks (plus the last workspace
@@ -15,6 +16,9 @@ use tauri_plugin_dialog::DialogExt;
 
 const MANIFEST: &str = "raelin.json";
 const BOARDS_DIR: &str = "boards";
+const ASSETS_DIR: &str = "assets";
+const ASSET_EXTENSIONS: [&str; 4] = ["png", "jpg", "webp", "gif"];
+const MAX_ASSET_BYTES: u64 = 10 * 1024 * 1024;
 const LAST_DIR_FILE: &str = "last-workspace.txt";
 const MAX_FILE_BYTES: u64 = 32 * 1024 * 1024;
 
@@ -95,6 +99,36 @@ fn is_safe_id(id: &str) -> bool {
             .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
 }
 
+fn is_asset_name(name: &str) -> bool {
+    name.split_once('.')
+        .is_some_and(|(id, ext)| is_safe_id(id) && ASSET_EXTENSIONS.contains(&ext))
+}
+
+fn asset_path(root: &Path, name: &str) -> Result<PathBuf, String> {
+    if !is_asset_name(name) {
+        return Err(format!("Geçersiz resim adı: {name}"));
+    }
+    Ok(root.join(ASSETS_DIR).join(name))
+}
+
+/// Decodes `encodeURIComponent` output; header values must be ASCII, folder paths are not.
+fn percent_decode(text: &str) -> Result<String, String> {
+    let bytes = text.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' {
+            let hex = text.get(i + 1..i + 3).ok_or("Bozuk başlık değeri.")?;
+            out.push(u8::from_str_radix(hex, 16).map_err(|_| "Bozuk başlık değeri.")?);
+            i += 3;
+        } else {
+            out.push(bytes[i]);
+            i += 1;
+        }
+    }
+    String::from_utf8(out).map_err(|_| "Bozuk başlık değeri.".into())
+}
+
 fn board_path(root: &Path, id: &str) -> Result<PathBuf, String> {
     if !is_safe_id(id) {
         return Err(format!("Geçersiz pano kimliği: {id}"));
@@ -112,7 +146,7 @@ fn read_limited(path: &Path) -> Result<String, String> {
 
 /// Write to a sibling temp file, then rename over the target, so a crash never
 /// leaves a half-written file behind.
-fn write_atomic(path: &Path, content: &str) -> Result<(), String> {
+fn write_atomic(path: &Path, content: impl AsRef<[u8]>) -> Result<(), String> {
     let mut name = path
         .file_name()
         .ok_or_else(|| format!("Geçersiz dosya yolu: {}", path.display()))?
@@ -153,6 +187,78 @@ fn read_files(root: &Path) -> Result<WorkspaceFiles, String> {
         });
     }
     Ok(WorkspaceFiles { manifest, boards })
+}
+
+/// Raw bytes of one picture in an approved workspace folder.
+#[tauri::command]
+pub fn read_asset(
+    state: State<'_, Allowed>,
+    dir: String,
+    name: String,
+) -> Result<tauri::ipc::Response, String> {
+    let path = asset_path(&state.check_dir(&dir)?, &name)?;
+    let meta = fs::metadata(&path).map_err(|e| format!("{name}: {e}"))?;
+    if meta.len() > MAX_ASSET_BYTES {
+        return Err(format!("Resim çok büyük: {name}"));
+    }
+    let bytes = fs::read(&path).map_err(|e| format!("{name}: {e}"))?;
+    Ok(tauri::ipc::Response::new(bytes))
+}
+
+/// Stores one picture. The bytes come as the raw request body (no JSON round trip); the
+/// folder and name come in percent-encoded `x-dir` / `x-name` headers.
+#[tauri::command]
+pub fn write_asset(
+    state: State<'_, Allowed>,
+    request: tauri::ipc::Request<'_>,
+) -> Result<(), String> {
+    let tauri::ipc::InvokeBody::Raw(bytes) = request.body() else {
+        return Err("Resim baytları bekleniyordu.".into());
+    };
+    if bytes.len() as u64 > MAX_ASSET_BYTES {
+        return Err("Resim 10 MB'tan büyük olamaz.".into());
+    }
+    let header = |key: &str| -> Result<String, String> {
+        let value = request
+            .headers()
+            .get(key)
+            .and_then(|v| v.to_str().ok())
+            .ok_or_else(|| format!("{key} başlığı eksik."))?;
+        percent_decode(value)
+    };
+    let root = state.check_dir(&header("x-dir")?)?;
+    let path = asset_path(&root, &header("x-name")?)?;
+    fs::create_dir_all(root.join(ASSETS_DIR)).map_err(|e| e.to_string())?;
+    write_atomic(&path, bytes)
+}
+
+/// Copies pictures between two approved folders ("save to another folder"). Pictures
+/// already present in the target are left alone; missing sources are reported back.
+#[tauri::command]
+pub fn copy_assets(
+    state: State<'_, Allowed>,
+    from: String,
+    to: String,
+    names: Vec<String>,
+) -> Result<Vec<String>, String> {
+    let source = state.check_dir(&from)?;
+    let target = state.check_dir(&to)?;
+    fs::create_dir_all(target.join(ASSETS_DIR)).map_err(|e| e.to_string())?;
+    let mut missing = Vec::new();
+    for name in names {
+        let src = asset_path(&source, &name)?;
+        let dest = asset_path(&target, &name)?;
+        if dest.is_file() {
+            continue;
+        }
+        if !src.is_file() {
+            missing.push(name);
+            continue;
+        }
+        let bytes = fs::read(&src).map_err(|e| format!("{name}: {e}"))?;
+        write_atomic(&dest, bytes)?;
+    }
+    Ok(missing)
 }
 
 /// Native folder picker. Blocking dialogs must not run on the main thread, hence async.
@@ -276,6 +382,27 @@ pub fn write_markdown(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn asset_names_stay_inside_assets() {
+        assert!(is_asset_name("img-1a2b.png"));
+        assert!(is_asset_name("img-1a2b.jpg"));
+        assert!(!is_asset_name("img-1a2b.exe"));
+        assert!(!is_asset_name("../img.png"));
+        assert!(!is_asset_name("img.png.png"));
+        assert!(!is_asset_name("IMG.png"));
+        assert!(!is_asset_name(".png"));
+    }
+
+    #[test]
+    fn decodes_percent_encoded_paths() {
+        assert_eq!(
+            percent_decode("C%3A%5CUsers%5C%C3%96rnek").unwrap(),
+            r"C:\Users\Örnek"
+        );
+        assert!(percent_decode("%G1").is_err());
+        assert!(percent_decode("%4").is_err());
+    }
 
     #[test]
     fn rejects_ids_that_could_escape_the_folder() {

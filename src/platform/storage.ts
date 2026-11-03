@@ -2,6 +2,7 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { parseWorkspace, serializeBoard, serializeManifest } from "../model/serialize";
 import type { Workspace } from "../model/types";
+import { flushAssets } from "./assets";
 
 export const isDesktop = isTauri();
 
@@ -14,6 +15,12 @@ interface WorkspaceFiles {
 export interface WorkspaceOrigin {
   dir: string;
   fingerprint: string;
+}
+
+export interface SaveResult {
+  origin: WorkspaceOrigin;
+  /** Pictures the boards use that were found neither in memory nor in the old folder. */
+  missingAssets: string[];
 }
 
 /** Text identity of a workspace folder; equal fingerprints mean nobody changed the files. */
@@ -53,12 +60,13 @@ export async function confirmAction(message: string): Promise<boolean> {
  * Writes the workspace folder; asks for a folder when none is known yet. Before writing it
  * checks what is on disk: another workspace in a newly picked folder, or files changed
  * outside the app since `origin` was recorded, both need an explicit overwrite.
+ * Pictures are written first, so a board on disk never names a file that is not there.
  * Returns null if the user cancelled.
  */
 export async function saveWorkspace(
   workspace: Workspace,
   origin: WorkspaceOrigin | null,
-): Promise<WorkspaceOrigin | null> {
+): Promise<SaveResult | null> {
   if (!isDesktop) throw new Error("Klasöre kaydetme yalnız masaüstü uygulamasında çalışır.");
   // A remembered folder is reused only while Rust still holds it on its allowlist.
   const known =
@@ -78,9 +86,10 @@ export async function saveWorkspace(
     }
   }
 
+  const missingAssets = await flushAssets(workspace, origin?.dir ?? null, dir);
   const files = toFiles(workspace);
   await invoke("write_workspace", { dir, manifest: files.manifest, boards: files.boards });
-  return { dir, fingerprint: fingerprintFiles(files) };
+  return { origin: { dir, fingerprint: fingerprintFiles(files) }, missingAssets };
 }
 
 export async function readWorkspaceAt(

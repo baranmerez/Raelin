@@ -1,4 +1,4 @@
-import { isSafeId } from "./ids";
+import { isAssetName, isSafeId } from "./ids";
 import {
   type BoardDoc,
   type BoardItem,
@@ -81,6 +81,11 @@ function itemProblem(item: BoardItem): string | null {
       if (!pointsOk || !isStr(item.color) || !isNum(item.size)) return "çizim noktaları geçersiz";
       return isNum(item.height) && item.height > 0 ? null : "yükseklik geçersiz";
     }
+    case "image":
+      if (!isStr(item.src) || !isAssetName(item.src) || !isStr(item.alt)) {
+        return "resim alanları geçersiz";
+      }
+      return isNum(item.height) && item.height > 0 ? null : "yükseklik geçersiz";
     default:
       return `bilinmeyen öğe türü: ${String((item as { kind?: unknown }).kind)}`;
   }

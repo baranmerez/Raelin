@@ -50,6 +50,18 @@ export interface StrokeItem extends PlacedItem {
 }
 
 /**
+ * Pasted or dropped picture. The bytes live next to the boards as `assets/<src>`;
+ * the board only names the file, so boards stay small, text-only and diffable.
+ */
+export interface ImageItem extends PlacedItem {
+  kind: "image";
+  src: string;
+  alt: string;
+  width: number;
+  height: number;
+}
+
+/**
  * A flow edge is part of the semantic graph. "reference" is a cross-reference
  * (e.g. a step pointing at a sketch) and never implies flow order.
  */
@@ -64,7 +76,7 @@ export interface EdgeItem {
   style: "flow" | "reference";
 }
 
-export type NodeItem = FlowNodeItem | NoteItem | RegionItem | StrokeItem;
+export type NodeItem = FlowNodeItem | NoteItem | RegionItem | StrokeItem | ImageItem;
 export type BoardItem = NodeItem | EdgeItem;
 
 export interface BoardDoc {

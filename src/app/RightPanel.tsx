@@ -114,6 +114,7 @@ function summarize(state: ReturnType<typeof useBoardStore.getState>): PanelSumma
     }
     if (item.kind === "stroke") continue;
     summary.alignCount++;
+    if (item.kind === "image") continue;
     summary.tonableCount++;
     summary.tone ??= item.tone;
     if (item.kind === "flowNode") {

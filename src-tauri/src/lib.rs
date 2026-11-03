@@ -31,6 +31,9 @@ pub fn run() {
             workspace::probe_workspace,
             workspace::write_workspace,
             workspace::write_markdown,
+            workspace::read_asset,
+            workspace::write_asset,
+            workspace::copy_assets,
             mcp::mcp_ready,
             mcp::mcp_send
         ])

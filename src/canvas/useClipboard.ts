@@ -8,6 +8,7 @@ import { validateItems } from "../model/serialize";
 import type { BoardDoc, BoardItem } from "../model/types";
 import { isNodeItem } from "../model/types";
 import { removeItems, useBoardStore } from "../state/boardStore";
+import { imageFiles, insertImages } from "./images";
 
 const marker = "raelin/items";
 const step = 32;
@@ -128,9 +129,11 @@ export function useClipboard() {
         insert(items, text);
         return;
       }
-      if ([...data.items].some((i) => i.type.startsWith("image/"))) {
+      const pictures = imageFiles(data);
+      if (pictures.length > 0) {
         e.preventDefault();
-        useBoardStore.getState().showToast("Resim yapıştırma henüz yok; sıradaki işlerde.");
+        const c = viewCenter();
+        void insertImages(pictures, c.x, c.y);
         return;
       }
       if (text.trim()) {

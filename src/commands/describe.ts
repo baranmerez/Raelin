@@ -65,6 +65,8 @@ function compactNode(board: BoardDoc, item: NodeItem, textLimit: number, withGeo
       };
     case "stroke":
       return { id: item.id, kind: item.kind, region, ...geo };
+    case "image":
+      return { id: item.id, kind: item.kind, alt: clip(item.alt, textLimit), region, ...geo };
   }
 }
 
@@ -80,7 +82,14 @@ function compactEdge(item: BoardItem) {
 }
 
 function counts(board: BoardDoc) {
-  const result: Record<string, number> = { flowNode: 0, note: 0, region: 0, stroke: 0, edge: 0 };
+  const result: Record<string, number> = {
+    flowNode: 0,
+    note: 0,
+    region: 0,
+    stroke: 0,
+    image: 0,
+    edge: 0,
+  };
   for (const item of board.items) result[item.kind]++;
   return result;
 }
@@ -158,6 +167,8 @@ function searchable(item: NodeItem): { field: string; text: string }[] {
       return [{ field: "title", text: item.title }];
     case "stroke":
       return [];
+    case "image":
+      return [{ field: "alt", text: item.alt }];
   }
 }
 

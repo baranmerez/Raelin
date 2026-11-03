@@ -11,3 +11,8 @@ export function newId(prefix: string): string {
 export function isSafeId(id: string): boolean {
   return /^[a-z0-9-]{1,64}$/.test(id);
 }
+
+/** Asset file names: a safe id plus a known image extension, nothing that can leave assets/. */
+export function isAssetName(name: string): boolean {
+  return /^[a-z0-9-]{1,64}\.(png|jpg|webp|gif)$/.test(name);
+}

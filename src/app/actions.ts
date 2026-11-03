@@ -30,9 +30,13 @@ export async function saveNow(): Promise<void> {
   try {
     const saved = await saveWorkspace(workspace, origin);
     if (!saved) return;
-    markSaved(saved, workspace);
+    markSaved(saved.origin, workspace);
     if (!isDirty()) clearRecovery();
-    showToast("Çalışma alanı kaydedildi.");
+    if (saved.missingAssets.length > 0) {
+      showToast(`Kaydedildi, ancak ${saved.missingAssets.length} resim bulunamadı.`, "error");
+    } else {
+      showToast("Çalışma alanı kaydedildi.");
+    }
   } catch (error) {
     showToast(`Kaydedilemedi: ${errorText(error)}`, "error");
   }

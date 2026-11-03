@@ -11,10 +11,11 @@ import {
   type NodeChange,
   ReactFlow,
   SelectionMode,
+  useReactFlow,
   useStore,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { type DragEvent, useCallback, useMemo, useRef, useState } from "react";
 import { contentsOf } from "../commands/geometry";
 import { makeEdge } from "../model/factory";
 import type { BoardDoc, ConnectorType, EdgeItem, NodeItem } from "../model/types";
@@ -22,7 +23,9 @@ import { isEdgeItem, isNodeItem } from "../model/types";
 import { mapItems, removeItems, useActiveBoard, useBoardStore } from "../state/boardStore";
 import { BottomBar } from "./BottomBar";
 import { FpsMeter } from "./FpsMeter";
+import { imageFiles, insertImages } from "./images";
 import { FlowNodeView } from "./nodes/FlowNodeView";
+import { ImageView } from "./nodes/ImageView";
 import { NoteView } from "./nodes/NoteView";
 import { RegionView } from "./nodes/RegionView";
 import { StrokeView } from "./nodes/StrokeView";
@@ -36,6 +39,7 @@ const nodeTypes = {
   note: NoteView,
   region: RegionView,
   stroke: StrokeView,
+  image: ImageView,
 };
 const edgeTypes = { raelin: RaelinEdge };
 const inkColor = "#5b3a9e";
@@ -73,6 +77,8 @@ function toRfNode(item: NodeItem, selected: boolean, size: Size | undefined): No
       };
     case "stroke":
       return { ...base, type: "stroke", width: item.width, height: item.height };
+    case "image":
+      return { ...base, type: "image", width: item.width, height: item.height };
   }
 }
 
@@ -175,6 +181,25 @@ export function Canvas({ stress }: { stress: boolean }) {
   const far = useStore((s) => s.transform[2] < 0.5);
   const { nodes, edges } = useRfGraph(board, selectedIds, measured);
   useClipboard();
+  const { screenToFlowPosition } = useReactFlow();
+
+  /** Pictures dragged in from the file manager land where they are dropped. */
+  const onDragOver = useCallback((e: DragEvent) => {
+    if (e.dataTransfer.types.includes("Files")) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "copy";
+    }
+  }, []);
+  const onDrop = useCallback(
+    (e: DragEvent) => {
+      const files = imageFiles(e.dataTransfer);
+      if (files.length === 0) return;
+      e.preventDefault();
+      const at = screenToFlowPosition({ x: e.clientX, y: e.clientY });
+      void insertImages(files, at.x, at.y);
+    },
+    [screenToFlowPosition],
+  );
   /** While a region is dragged: where it and the items inside it started. */
   const carry = useRef<{
     regions: Map<string, { x: number; y: number }>;
@@ -260,7 +285,10 @@ export function Canvas({ stress }: { stress: boolean }) {
             const size = sizes.get(item.id);
             if (!move && !size) return item;
             const next = { ...item, ...move };
-            if (size && (item.kind === "region" || item.kind === "flowNode")) {
+            if (
+              size &&
+              (item.kind === "region" || item.kind === "flowNode" || item.kind === "image")
+            ) {
               return { ...next, width: Math.round(size.width), height: Math.round(size.height) };
             }
             return next;
@@ -314,7 +342,13 @@ export function Canvas({ stress }: { stress: boolean }) {
   const many = board.items.length > 300;
 
   return (
-    <div className={`canvas flow-style-${board.flowStyle}${far ? " is-far" : ""}`} data-tool={tool}>
+    // biome-ignore lint/a11y/noStaticElementInteractions: file drop target; Ctrl+V is the keyboard path.
+    <div
+      className={`canvas flow-style-${board.flowStyle}${far ? " is-far" : ""}`}
+      data-tool={tool}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+    >
       <ReactFlow
         // A fresh instance per board gives each board its own initial fit.
         key={board.id}

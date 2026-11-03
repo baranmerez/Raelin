@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { cloneItems, withInnerEdges } from "../model/clone";
 import { emptyBoard, makeEdge, makeFlowNode, makeRegion } from "../model/factory";
+import { boardToMarkdown } from "../model/markdown";
+import { FormatError, validateItems } from "../model/serialize";
 import type { BoardDoc, FlowNodeItem, Workspace } from "../model/types";
 import { formatVersion } from "../model/types";
 import { useBoardStore } from "../state/boardStore";
@@ -145,5 +147,29 @@ describe("strokesAt", () => {
     const board = boardOf(stroke);
     expect(strokesAt(board, 150, 105, 8).has("s-1")).toBe(true);
     expect(strokesAt(board, 150, 250, 8).size).toBe(0);
+  });
+});
+
+describe("image items", () => {
+  const image = {
+    id: "img-1",
+    kind: "image" as const,
+    src: "img-abc.png",
+    alt: "Ekran taslağı",
+    x: 0,
+    y: 0,
+    width: 320,
+    height: 200,
+  };
+
+  it("accept only plain asset names", () => {
+    expect(() => validateItems([image])).not.toThrow();
+    for (const src of ["../x.png", "img-abc.exe", "IMG.png", "a/b.png"]) {
+      expect(() => validateItems([{ ...image, src }])).toThrow(FormatError);
+    }
+  });
+
+  it("show up in the Markdown export", () => {
+    expect(boardToMarkdown(boardOf(image))).toContain("![Ekran taslağı](assets/img-abc.png)");
   });
 });
