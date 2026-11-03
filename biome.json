@@ -9,7 +9,8 @@
       "!src-tauri/gen",
       "!node_modules",
       "!**/*.md",
-      "!docs/assets"
+      "!docs/assets",
+      "!.claude"
     ]
   },
   "formatter": {
