@@ -24,22 +24,23 @@ The UI also runs in a plain browser with `npm run dev` (file save/open needs the
 
 AI changes appear live and undo with Ctrl+Z. The bridge may start before Raelin does and
 survives app restarts: it reconnects on its own and tells the client the tool list changed.
-Build the bridge once:
 
-```bash
-cargo build -p raelin-mcp
-```
+The installer puts the bridge next to the app, at `%LOCALAPPDATA%\Raelin\raelin-mcp.exe`.
+Point your client at that full path:
 
-Then point your client at `target\debug\raelin-mcp.exe` (use the full path):
-
-- Claude Code: `claude mcp add raelin -- C:\path\to\raelin\target\debug\raelin-mcp.exe`
+- Claude Code: `claude mcp add --scope user raelin -- "%LOCALAPPDATA%\Raelin\raelin-mcp.exe"`
+  (expand the variable if your shell does not)
 - Claude Desktop (`claude_desktop_config.json`):
-  `{ "mcpServers": { "raelin": { "command": "C:\\path\\to\\raelin\\target\\debug\\raelin-mcp.exe" } } }`
+  `{ "mcpServers": { "raelin": { "command": "C:\\Users\\you\\AppData\\Local\\Raelin\\raelin-mcp.exe" } } }`
 - Codex (`~/.codex/config.toml`):
-  `[mcp_servers.raelin]` and `command = 'C:\path\to\raelin\target\debug\raelin-mcp.exe'`
+  `[mcp_servers.raelin]` and `command = 'C:\Users\you\AppData\Local\Raelin\raelin-mcp.exe'`
+
+Use the installed copy even while developing: `npm run tauri dev` rebuilds and replaces
+`target\debug\raelin-mcp.exe`, which fails while a client is running that file. Close AI
+clients before reinstalling for the same reason.
 
 The bridge talks to the app over a per-user named pipe with a per-launch token. Tool call
-sizes (never content) are logged to `%APPDATA%\app.raelin.desktop\logs\mcp-usage.jsonl`.
+sizes (never content) are logged to `%LOCALAPPDATA%\app.raelin.desktop\logs\mcp-usage.jsonl`.
 
 ## License
 

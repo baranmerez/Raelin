@@ -29,3 +29,6 @@ dist-ssr
 
 # Cargo workspace build output
 /target/
+
+# Bridge copied in for bundling by scripts/prepare-bridge.mjs
+/src-tauri/binaries/

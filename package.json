@@ -12,7 +12,8 @@
     "lint": "biome check .",
     "format": "biome format --write .",
     "test": "vitest run",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "bridge": "node scripts/prepare-bridge.mjs"
   },
   "dependencies": {
     "@dagrejs/dagre": "~3.1.3",
