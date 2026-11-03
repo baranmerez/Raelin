@@ -28,7 +28,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/assets/stats.svg" alt="8 MCP tools · 1 file per workspace · 0 accounts or cloud · 1 undo step per AI change" width="100%">
+  <img src="docs/assets/stats.svg" alt="18 MCP tools · 1 file per workspace · 0 accounts or cloud · 1 undo step per AI change" width="100%">
 </p>
 
 ## 🎨 One board for the whole thought
@@ -45,15 +45,20 @@ Raelin is a desktop canvas for the messy middle of a piece of work: the brainsto
 ## ✨ What you get
 
 - 📝 **Notes** with rich text (headings, lists, bold), a title and a tone; paste plain text and it becomes a note.
-- 🔷 **Flow steps** (start, process, decision) with elbow, curved or straight connectors and editable labels.
+- 🔷 **Flow steps and shapes**: start, process, decision, ellipse, database, document, input/output, cloud and actor, with elbow, curved or straight connectors and editable labels.
+- 🔤 **Free text, arrows and lines** for headings, callouts and quick pointers.
+- ☑️ **Checklists** with progress, and **link cards** with a title and a note.
+- 🗄️ **Table cards** for ER sketches: columns, types, primary keys and relations, exported as Markdown tables for your AI.
+- 🧩 **Templates**: mind map, kanban and swimlane, inserted in one step.
 - 🟪 **Regions** that group a part of the board; dragging a region carries everything inside it.
 - 🖊️ **Pen** with pressure, plus an eraser for strokes.
 - 🖼️ **Pictures**: paste a screenshot or drop image files; they are stored inside the workspace file.
 - 🗂️ **Boards as tabs**: rename, duplicate, delete with undo.
+- 📁 **Files by name**: new, open, recent files, save as and rename from the workspace name; Raelin asks Save / Don't save / Cancel before unsaved work could go.
 - 📋 **Copy, cut, paste, duplicate**, also across boards; **align and distribute** a selection.
 - 📤 **Export** a board or the selection as Markdown, PNG or SVG.
 - ↩️ **Undo everything**: every edit and every AI batch, with a recovery copy if the app closes unexpectedly.
-- 🔌 **8 MCP tools** for any MCP client, through a small bridge that ships with the app.
+- 🔌 **18 MCP tools** for any MCP client, through a small bridge that ships with the app.
 
 <img src="docs/assets/divider.svg" alt="" width="100%">
 
@@ -171,6 +176,13 @@ npm run tauri build
 | `apply_changes` | One atomic batch: `add`, `update`, `connect`, `update_edge`, `move`, `delete`, `style`. |
 | `layout` | Automatic top-down or left-right layout of a region, chosen ids, or everything outside regions. |
 | `create_board` | A new empty board, without switching your view. |
+| `rename_board` · `duplicate_board` · `delete_board` | Board management; deleting always asks and can be undone. |
+| `copy_items` | Copy (or move, after asking) items to another board with fresh ids; a move undoes on both boards together. |
+| `find_replace` | Find and replace text across every kind of item; `dryRun` previews the matches first. |
+| `apply_template` | Add a mind map, kanban or swimlane. |
+| `view_board` | A PNG of the open board, a region or chosen items, so the AI can see the layout. |
+| `select` · `focus` | Select items on your screen, or switch to a board and zoom to them. |
+| `recent_changes` | Who changed what and when: the last undo steps of a board. |
 
 Usage sizes (never content) are logged to `%LOCALAPPDATA%\app.raelin.desktop\logs\mcp-usage.jsonl`.
 
@@ -180,16 +192,17 @@ Usage sizes (never content) are logged to `%LOCALAPPDATA%\app.raelin.desktop\log
 |---|---|
 | `V` `P` `E` | Select · pen · eraser |
 | `R` `D` `O` `N` `F` | Process step · decision · start/end · note · region |
+| `T` `L` `K` `U` `B` | Text · arrow · checklist · link card · table |
 | Double-click · `F2` | Edit text · rename a board tab |
 | `Ctrl` + `C` / `X` / `V` / `D` | Copy · cut · paste · duplicate |
 | `Ctrl` + `A` · `Del` · `Esc` | Select all · delete · leave the tool, then clear the selection |
 | `Ctrl` + `Z` / `Y` | Undo · redo |
-| `Ctrl` + `S` / `Shift+S` / `O` | Save · save as · open |
+| `Ctrl` + `N` / `O` / `S` / `Shift+S` | New · open · save · save as |
 | `Space` + drag · `Ctrl` + wheel | Pan · zoom |
 
 ## 🗺️ Roadmap
 
-- 🗄️ **Database sketches**: ER diagrams with tables, columns and relations, exported as Markdown for your AI.
+- 🗄️ **Database designer**: grow the table cards into a full ER designer (column-level relations, auto layout for tables).
 - 🧠 **Project memory**: decisions and context that stay with the workspace and that the AI can build on.
 - 🌐 **Beyond Windows**: the UI already runs in a browser; macOS and a web version come later.
 
