@@ -1,9 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { emptyBoard } from "../model/factory";
-import type { BoardDoc, ChecklistItem, LinkItem, TableItem, TextItem } from "../model/types";
+import { emptyBoard, makeChecklist, makeFlowNode, makeLink, makeTable } from "../model/factory";
+import type {
+  BoardDoc,
+  ChecklistItem,
+  LinkItem,
+  NodeItem,
+  TableItem,
+  TextItem,
+} from "../model/types";
+import { isNodeItem } from "../model/types";
 import { applyOps, CommandError } from "./apply";
 import { describeBoard, searchWorkspace } from "./describe";
+import { findReplace } from "./findReplace";
 import { opSchema } from "./schema";
+import { placeTemplate } from "./template";
 
 const find = <T>(board: BoardDoc, id: string) => board.items.find((i) => i.id === id) as T;
 
@@ -115,5 +125,34 @@ describe("apply_changes with card kinds", () => {
       }).success,
     ).toBe(false);
     expect(opSchema.safeParse({ op: "add", kind: "arrow" }).success).toBe(false);
+  });
+});
+
+describe("integration of the new kinds with board tools", () => {
+  it("places a template right of the content as valid, fresh items", () => {
+    const board = { ...emptyBoard("Test"), items: [makeFlowNode("process", 0, 0)] };
+    const { board: next, created } = placeTemplate(board, "kanban");
+    expect(created.length).toBeGreaterThan(3);
+    expect(new Set(next.items.map((i) => i.id)).size).toBe(next.items.length);
+    const added = next.items.filter((i) => created.includes(i.id) && isNodeItem(i)) as NodeItem[];
+    expect(Math.min(...added.map((i) => i.x))).toBeGreaterThan(board.items[0].x as number);
+  });
+
+  it("find_replace reaches checklist entries, link notes and table columns", () => {
+    const checklist = {
+      ...makeChecklist(0, 0),
+      title: "Plan",
+      items: [{ id: "c1", text: "order_id ekle", done: false }],
+    };
+    const link = { ...makeLink(0, 300), note: "order_id açıklaması" };
+    const table = makeTable(0, 600);
+    const withColumn = {
+      ...table,
+      columns: [{ id: "k1", name: "order_id", type: "int", pk: true, nullable: false }],
+    };
+    const board = { ...emptyBoard("Test"), items: [checklist, link, withColumn] };
+    const result = findReplace(board, { find: "order_id", replace: "invoice_id" });
+    expect(result.changed.sort()).toEqual([checklist.id, link.id, withColumn.id].sort());
+    expect(JSON.stringify(result.board)).not.toContain("order_id");
   });
 });

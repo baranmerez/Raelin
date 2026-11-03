@@ -8,6 +8,7 @@ import { findReplace } from "../commands/findReplace";
 import { recentChanges } from "../commands/history";
 import { layoutBoard } from "../commands/layout";
 import { opSchema } from "../commands/schema";
+import { placeTemplate } from "../commands/template";
 import { boardToMarkdown } from "../model/markdown";
 import type { BoardDoc } from "../model/types";
 import { isNodeItem } from "../model/types";
@@ -15,14 +16,16 @@ import { confirmAction } from "../platform/storage";
 import { removeItems, useBoardStore } from "../state/boardStore";
 
 const instructions = [
-  "Raelin is a canvas of boards holding flow steps (flowNode), notes, regions and edges.",
+  "Raelin is a canvas of boards holding flow steps (flowNode), notes, regions, text, checklists,",
+  "link cards, table cards (ER design: relations are reference edges) and edges.",
   "Start with get_overview; read only what you need (read_board with regionId/ids/kinds, or search).",
   "Write with ONE apply_changes call per intent: pass the board revision you read as expectedRevision,",
   "give new nodes a ref and use refs in later ops of the same batch. Place nodes with",
   "place.after (below a node) or place.in (inside a region) instead of coordinates; then call layout",
   "to tidy a region. On STALE_REVISION re-read and retry. Deletes ask the user for confirmation.",
   "Also: find_replace (dryRun first), copy_items between boards, rename/duplicate/delete_board,",
-  "view_board for a picture, select/focus to show the user something, recent_changes for history.",
+  "view_board for a picture, select/focus to show the user something, recent_changes for history,",
+  "apply_template for a mind map, kanban or swimlane.",
 ].join(" ");
 
 type ToolText = { content: { type: "text"; text: string }[]; isError?: boolean };
@@ -397,6 +400,37 @@ export function createRaelinServer(): McpServer {
       const id = store.createBoard(title);
       store.showToast(`${client()} "${title}" panosunu oluşturdu.`);
       return ok({ id, revision: useBoardStore.getState().revisions[id] ?? 0 });
+    },
+  );
+
+  server.registerTool(
+    "apply_template",
+    {
+      description:
+        "Add a ready-made layout: mindMap, kanban (3 columns) or swimlane (3 lanes). Placed right of the content or centred on at. One undo step; returns new ids.",
+      inputSchema: {
+        boardId: z.string().optional(),
+        expectedRevision: z.number().int(),
+        template: z.enum(["mindMap", "kanban", "swimlane"]),
+        at: z.object({ x: z.number().finite(), y: z.number().finite() }).optional(),
+        opId: z.string().max(80).optional(),
+      },
+    },
+    async ({ boardId, expectedRevision, template, at, opId }) => {
+      try {
+        const { id, board } = boardOrFail(boardId);
+        const key = opId ? `${id}:template:${opId}` : null;
+        const hit = cached(key);
+        if (hit) return hit;
+        checkRevision(id, expectedRevision);
+        const result = placeTemplate(board, template, at);
+        const revision = commitFromClient(id, result.board, client(), "şablon ekledi");
+        const response = ok({ revision, created: result.created });
+        remember(key, response);
+        return response;
+      } catch (error) {
+        return failWithRevision(error);
+      }
     },
   );
 

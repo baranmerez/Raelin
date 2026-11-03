@@ -136,6 +136,40 @@ export function findReplace(board: BoardDoc, options: FindReplaceOptions): FindR
       case "edge":
         field("label", item.label, (label) => ({ ...item, label: label || undefined }));
         break;
+      case "text":
+        field("text", item.text, (text) => ({ ...item, text }));
+        break;
+      case "link":
+        field("title", item.title, (title) => ({ ...(next as typeof item), title }));
+        field("note", item.note, (note) => ({ ...(next as typeof item), note }));
+        break;
+      case "checklist": {
+        field("title", item.title, (title) => ({ ...item, title }));
+        // Each entry counts as its own field; entries keep their ids.
+        let entries = item.items;
+        item.items.forEach((entry, index) => {
+          field(`items[${index}]`, entry.text, (text) => {
+            entries = entries.map((e, i) => (i === index ? { ...e, text } : e));
+            return { ...(next as typeof item), items: entries };
+          });
+        });
+        break;
+      }
+      case "table": {
+        field("name", item.name, (name) => ({ ...item, name }));
+        let columns = item.columns;
+        item.columns.forEach((column, index) => {
+          field(`columns[${index}].name`, column.name, (name) => {
+            columns = columns.map((c, i) => (i === index ? { ...c, name } : c));
+            return { ...(next as typeof item), columns };
+          });
+          field(`columns[${index}].note`, column.note, (note) => {
+            columns = columns.map((c, i) => (i === index ? { ...c, note } : c));
+            return { ...(next as typeof item), columns };
+          });
+        });
+        break;
+      }
       default:
         break;
     }
