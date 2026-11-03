@@ -67,6 +67,58 @@ function compactNode(board: BoardDoc, item: NodeItem, textLimit: number, withGeo
       return { id: item.id, kind: item.kind, region, ...geo };
     case "image":
       return { id: item.id, kind: item.kind, alt: clip(item.alt, textLimit), region, ...geo };
+    case "text":
+      return {
+        id: item.id,
+        kind: item.kind,
+        text: clip(item.text, textLimit),
+        size: item.size,
+        tone: item.tone,
+        region,
+        ...geo,
+      };
+    case "arrow":
+      return { id: item.id, kind: item.kind, head: item.head, region, ...geo };
+    case "checklist":
+      return {
+        id: item.id,
+        kind: item.kind,
+        title: clip(item.title, textLimit),
+        items: item.items.map((e) => ({
+          text: clip(e.text, textLimit),
+          ...(e.done ? { done: true } : {}),
+        })),
+        tone: item.tone,
+        region,
+        ...geo,
+      };
+    case "link":
+      return {
+        id: item.id,
+        kind: item.kind,
+        url: item.url,
+        title: clip(item.title, textLimit),
+        ...(item.note ? { note: clip(item.note, textLimit) } : {}),
+        tone: item.tone,
+        region,
+        ...geo,
+      };
+    case "table":
+      return {
+        id: item.id,
+        kind: item.kind,
+        title: clip(item.name, textLimit),
+        columns: item.columns.map((c) => ({
+          name: c.name,
+          type: c.type,
+          ...(c.pk ? { pk: true } : {}),
+          ...(c.nullable ? { nullable: true } : {}),
+          ...(c.note ? { note: clip(c.note, textLimit) } : {}),
+        })),
+        tone: item.tone,
+        region,
+        ...geo,
+      };
   }
 }
 
@@ -90,7 +142,8 @@ function counts(board: BoardDoc) {
     image: 0,
     edge: 0,
   };
-  for (const item of board.items) result[item.kind]++;
+  // Newer kinds are listed only when present, to keep the overview short.
+  for (const item of board.items) result[item.kind] = (result[item.kind] ?? 0) + 1;
   return result;
 }
 
@@ -169,6 +222,26 @@ function searchable(item: NodeItem): { field: string; text: string }[] {
       return [];
     case "image":
       return [{ field: "alt", text: item.alt }];
+    case "text":
+      return [{ field: "text", text: item.text }];
+    case "arrow":
+      return [];
+    case "checklist":
+      return [
+        { field: "title", text: item.title },
+        { field: "items", text: item.items.map((e) => e.text).join("\n") },
+      ];
+    case "link":
+      return [
+        { field: "title", text: item.title },
+        { field: "url", text: item.url },
+        { field: "note", text: item.note },
+      ];
+    case "table":
+      return [
+        { field: "title", text: item.name },
+        { field: "columns", text: item.columns.map((c) => `${c.name} ${c.type}`).join("\n") },
+      ];
   }
 }
 

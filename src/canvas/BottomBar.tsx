@@ -1,42 +1,114 @@
 import { Panel, useReactFlow } from "@xyflow/react";
 import { AnimatePresence, motion } from "motion/react";
 import { useState } from "react";
+import { makeFlowNode } from "../model/factory";
+import { buildTemplate, type TemplateId, templateList } from "../model/templates";
 import { penColors } from "../model/tones";
+import type { BoardItem, FlowShape } from "../model/types";
+import { isNodeItem } from "../model/types";
 import { type Tool, useBoardStore } from "../state/boardStore";
 import { Icon, type IconName } from "../ui/Icon";
 import { placeItem } from "./ToolOverlay";
 
-const shapeMenu: { tool: Tool; label: string; icon: IconName }[] = [
-  { tool: "terminal", label: "Başlangıç / bitiş", icon: "terminal" },
-  { tool: "process", label: "Adım", icon: "process" },
-  { tool: "decision", label: "Karar", icon: "decision" },
-  { tool: "note", label: "Not", icon: "note" },
-  { tool: "region", label: "Bölge", icon: "region" },
+type MenuEntry = {
+  key: string;
+  label: string;
+  icon: IconName;
+  make: (x: number, y: number) => BoardItem | null;
+};
+
+const shape = (s: FlowShape, label: string): MenuEntry => ({
+  key: s,
+  label,
+  icon: s,
+  make: (x, y) => makeFlowNode(s, x, y),
+});
+const tool = (t: Tool, label: string, icon: IconName): MenuEntry => ({
+  key: t,
+  label,
+  icon,
+  make: (x, y) => placeItem(t, x, y),
+});
+
+const shapeMenu: { title: string; entries: MenuEntry[] }[] = [
+  {
+    title: "Akış",
+    entries: [
+      shape("terminal", "Başlangıç / bitiş"),
+      shape("process", "Adım"),
+      shape("decision", "Karar"),
+      shape("ellipse", "Elips"),
+      shape("io", "Girdi / çıktı"),
+      shape("document", "Belge"),
+      shape("database", "Veritabanı"),
+      shape("cloud", "Bulut"),
+      shape("actor", "Aktör"),
+    ],
+  },
+  {
+    title: "Kartlar",
+    entries: [
+      tool("note", "Not", "note"),
+      tool("region", "Bölge", "region"),
+      tool("text", "Metin", "text"),
+      tool("checklist", "Kontrol listesi", "checklist"),
+      tool("link", "Bağlantı kartı", "link"),
+      tool("table", "Tablo", "table"),
+    ],
+  },
 ];
 
+const menuMotion = {
+  initial: { opacity: 0, y: 8, scale: 0.97 },
+  animate: { opacity: 1, y: 0, scale: 1 },
+  exit: { opacity: 0, y: 6, scale: 0.98 },
+  transition: { duration: 0.16 },
+};
+
 export function BottomBar() {
-  const tool = useBoardStore((s) => s.tool);
+  const activeTool = useBoardStore((s) => s.tool);
   const setTool = useBoardStore((s) => s.setTool);
   const penColor = useBoardStore((s) => s.penColor);
   const setPen = useBoardStore((s) => s.setPen);
   const commit = useBoardStore((s) => s.commit);
   const setSelection = useBoardStore((s) => s.setSelection);
   const { screenToFlowPosition } = useReactFlow();
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [menu, setMenu] = useState<"shapes" | "templates" | null>(null);
 
-  const addAtCenter = (shape: Tool) => {
+  const viewCenter = () => {
     const canvas = document.querySelector(".canvas")?.getBoundingClientRect();
-    if (!canvas) return;
-    const pos = screenToFlowPosition({
+    if (!canvas) return null;
+    return screenToFlowPosition({
       x: canvas.left + canvas.width / 2,
       y: canvas.top + canvas.height / 2,
     });
-    const item = placeItem(shape, pos.x, pos.y);
-    if (!item) return;
-    commit((b) => ({ ...b, items: [...b.items, item] }));
-    setSelection([item.id]);
-    setMenuOpen(false);
   };
+
+  /** Adds items in one undo step and selects the new nodes. */
+  const insert = (items: BoardItem[]) => {
+    if (items.length === 0) return;
+    commit((b) => ({ ...b, items: [...b.items, ...items] }));
+    setSelection(
+      items
+        .filter(isNodeItem)
+        .map((i) => i.id)
+        .sort(),
+    );
+    setMenu(null);
+  };
+
+  const addAtCenter = (entry: MenuEntry) => {
+    const pos = viewCenter();
+    const item = pos && entry.make(pos.x, pos.y);
+    if (item) insert([item]);
+  };
+
+  const addTemplate = (id: TemplateId) => {
+    const pos = viewCenter();
+    if (pos) insert(buildTemplate(id, pos.x, pos.y));
+  };
+
+  const toggle = (which: "shapes" | "templates") => setMenu((m) => (m === which ? null : which));
 
   return (
     <Panel position="bottom-center" className="bottom-bar">
@@ -44,12 +116,12 @@ export function BottomBar() {
         <button
           key={t}
           type="button"
-          className={`tool-button${tool === t ? " is-active" : ""}`}
+          className={`tool-button${activeTool === t ? " is-active" : ""}`}
           onClick={() => setTool(t)}
           aria-label={t === "select" ? "Seç" : "Kalem"}
-          aria-pressed={tool === t}
+          aria-pressed={activeTool === t}
         >
-          {tool === t && <motion.span layoutId="bottom-tool" className="tool-active-bg" />}
+          {activeTool === t && <motion.span layoutId="bottom-tool" className="tool-active-bg" />}
           <Icon name={t === "select" ? "pointer" : "pen"} />
         </button>
       ))}
@@ -72,31 +144,59 @@ export function BottomBar() {
         <button
           type="button"
           className="pill-button"
-          onClick={() => setMenuOpen((o) => !o)}
-          aria-expanded={menuOpen}
+          onClick={() => toggle("shapes")}
+          aria-expanded={menu === "shapes"}
         >
           <Icon name="process" size={18} />
           Şekil ekle
           <Icon name="chevron" size={16} />
         </button>
         <AnimatePresence>
-          {menuOpen && (
-            <motion.div
-              className="popover-menu up"
-              initial={{ opacity: 0, y: 8, scale: 0.97 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 6, scale: 0.98 }}
-              transition={{ duration: 0.16 }}
-            >
-              {shapeMenu.map((entry) => (
+          {menu === "shapes" && (
+            <motion.div className="popover-menu up shape-menu" {...menuMotion}>
+              {shapeMenu.map((group) => (
+                <div key={group.title} className="shape-menu-group">
+                  <p className="menu-hint">{group.title}</p>
+                  {group.entries.map((entry) => (
+                    <button
+                      key={entry.key}
+                      type="button"
+                      className="menu-item"
+                      onClick={() => addAtCenter(entry)}
+                    >
+                      <Icon name={entry.icon} size={18} />
+                      {entry.label}
+                    </button>
+                  ))}
+                </div>
+              ))}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+      <div className="menu-anchor">
+        <button
+          type="button"
+          className="pill-button"
+          onClick={() => toggle("templates")}
+          aria-expanded={menu === "templates"}
+        >
+          <Icon name="template" size={18} />
+          Şablonlar
+          <Icon name="chevron" size={16} />
+        </button>
+        <AnimatePresence>
+          {menu === "templates" && (
+            <motion.div className="popover-menu up align-right" {...menuMotion}>
+              {templateList.map((t) => (
                 <button
-                  key={entry.tool}
+                  key={t.id}
                   type="button"
                   className="menu-item"
-                  onClick={() => addAtCenter(entry.tool)}
+                  onClick={() => addTemplate(t.id)}
                 >
-                  <Icon name={entry.icon} size={18} />
-                  {entry.label}
+                  <Icon name="template" size={18} />
+                  {t.label}
                 </button>
               ))}
             </motion.div>

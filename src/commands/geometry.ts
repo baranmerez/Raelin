@@ -1,3 +1,4 @@
+import { cardHeight } from "../model/factory";
 import type { BoardDoc, NodeItem, RegionItem } from "../model/types";
 import { isNodeItem } from "../model/types";
 
@@ -23,6 +24,9 @@ export function rectOf(item: NodeItem): Rect {
   if (item.kind === "note") {
     const lines = countBlocks(item.content.content as { content?: unknown[] }[]);
     return { x: item.x, y: item.y, width: item.width, height: 64 + Math.max(1, lines) * 26 };
+  }
+  if (!("height" in item)) {
+    return { x: item.x, y: item.y, width: item.width, height: cardHeight(item) };
   }
   return { x: item.x, y: item.y, width: item.width, height: item.height };
 }

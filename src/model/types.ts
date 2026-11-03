@@ -3,7 +3,18 @@ import type { JSONContent } from "@tiptap/react";
 export const formatVersion = 1;
 
 export type ToneName = "lilac" | "peach" | "periwinkle" | "sage" | "butter" | "paper";
-export type FlowShape = "terminal" | "process" | "decision";
+export type FlowShape =
+  | "terminal"
+  | "process"
+  | "decision"
+  | "ellipse"
+  | "database"
+  | "document"
+  | "io"
+  | "cloud"
+  | "actor";
+export type TextSize = "s" | "m" | "l";
+export type ArrowHead = "end" | "both" | "none";
 export type FlowStyle = "pastel" | "line" | "flat";
 export type ConnectorType = "elbow" | "curve" | "straight";
 export type BackgroundKind = "dots" | "grid" | "plain";
@@ -61,6 +72,70 @@ export interface ImageItem extends PlacedItem {
   height: number;
 }
 
+/** Borderless label; the tone only colors the ink. Height follows the text. */
+export interface TextItem extends PlacedItem {
+  kind: "text";
+  text: string;
+  size: TextSize;
+  tone: ToneName;
+  width: number;
+}
+
+/** Free arrow or line; start/end are relative to the item's x/y, inside width/height. */
+export interface ArrowItem extends PlacedItem {
+  kind: "arrow";
+  start: [number, number];
+  end: [number, number];
+  head: ArrowHead;
+  dashed: boolean;
+  color: string;
+  width: number;
+  height: number;
+}
+
+export interface CheckEntry {
+  id: string;
+  text: string;
+  done: boolean;
+}
+
+/** Card with tickable entries; height follows the list. */
+export interface ChecklistItem extends PlacedItem {
+  kind: "checklist";
+  title: string;
+  items: CheckEntry[];
+  tone: ToneName;
+  width: number;
+}
+
+/** Web link card; the url is always http(s). */
+export interface LinkItem extends PlacedItem {
+  kind: "link";
+  url: string;
+  title: string;
+  note: string;
+  tone: ToneName;
+  width: number;
+}
+
+export interface TableColumn {
+  id: string;
+  name: string;
+  type: string;
+  pk: boolean;
+  nullable: boolean;
+  note?: string;
+}
+
+/** Database table card (ER design); relations are ordinary edges between tables. */
+export interface TableItem extends PlacedItem {
+  kind: "table";
+  name: string;
+  columns: TableColumn[];
+  tone: ToneName;
+  width: number;
+}
+
 /**
  * A flow edge is part of the semantic graph. "reference" is a cross-reference
  * (e.g. a step pointing at a sketch) and never implies flow order.
@@ -76,7 +151,20 @@ export interface EdgeItem {
   style: "flow" | "reference";
 }
 
-export type NodeItem = FlowNodeItem | NoteItem | RegionItem | StrokeItem | ImageItem;
+export type NodeItem =
+  | FlowNodeItem
+  | NoteItem
+  | RegionItem
+  | StrokeItem
+  | ImageItem
+  | TextItem
+  | ArrowItem
+  | ChecklistItem
+  | LinkItem
+  | TableItem;
+
+/** Items whose height follows their content instead of being stored. */
+export type CardItem = TextItem | ChecklistItem | LinkItem | TableItem;
 export type BoardItem = NodeItem | EdgeItem;
 
 export interface BoardDoc {

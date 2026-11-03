@@ -6,11 +6,13 @@ import { useMcpStatus } from "../mcp/connection";
 import { shapeSize } from "../model/factory";
 import { penColors, toneOrder, tones } from "../model/tones";
 import type {
+  ArrowHead,
   BoardItem,
   ConnectorType,
   EdgeItem,
   FlowShape,
   FlowStyle,
+  TextSize,
   ToneName,
 } from "../model/types";
 import { isDesktop } from "../platform/storage";
@@ -44,6 +46,24 @@ const shapes: { id: FlowShape; label: string }[] = [
   { id: "terminal", label: "Başlangıç" },
   { id: "process", label: "Adım" },
   { id: "decision", label: "Karar" },
+  { id: "ellipse", label: "Elips" },
+  { id: "io", label: "Girdi/çıktı" },
+  { id: "document", label: "Belge" },
+  { id: "database", label: "Veritabanı" },
+  { id: "cloud", label: "Bulut" },
+  { id: "actor", label: "Aktör" },
+];
+
+const textSizes: { id: TextSize; label: string }[] = [
+  { id: "s", label: "Küçük" },
+  { id: "m", label: "Orta" },
+  { id: "l", label: "Büyük" },
+];
+
+const arrowHeads: { id: ArrowHead; label: string }[] = [
+  { id: "end", label: "Tek uç" },
+  { id: "both", label: "Çift uç" },
+  { id: "none", label: "Çizgi" },
 ];
 
 function StylePreview({ style }: { style: FlowStyle }) {
@@ -79,6 +99,12 @@ interface PanelSummary {
   shape: FlowShape | "mixed" | null;
   edgeCount: number;
   edgeStyle: EdgeItem["style"] | "mixed" | null;
+  textCount: number;
+  textSize: TextSize | "mixed" | null;
+  arrowCount: number;
+  arrowHead: ArrowHead | "mixed" | null;
+  arrowDashed: boolean | "mixed" | null;
+  arrowColor: string | "mixed" | null;
 }
 
 function merge<T>(current: T | "mixed" | null, value: T): T | "mixed" {
@@ -102,6 +128,12 @@ function summarize(state: ReturnType<typeof useBoardStore.getState>): PanelSumma
     shape: null,
     edgeCount: 0,
     edgeStyle: null,
+    textCount: 0,
+    textSize: null,
+    arrowCount: 0,
+    arrowHead: null,
+    arrowDashed: null,
+    arrowColor: null,
   };
   if (state.selectedIds.length === 0) return summary;
   const selected = new Set(state.selectedIds);
@@ -114,12 +146,22 @@ function summarize(state: ReturnType<typeof useBoardStore.getState>): PanelSumma
     }
     if (item.kind === "stroke") continue;
     summary.alignCount++;
+    if (item.kind === "arrow") {
+      summary.arrowCount++;
+      summary.arrowHead = merge(summary.arrowHead, item.head);
+      summary.arrowDashed = merge(summary.arrowDashed, item.dashed);
+      summary.arrowColor = merge(summary.arrowColor, item.color);
+      continue;
+    }
     if (item.kind === "image") continue;
     summary.tonableCount++;
     summary.tone ??= item.tone;
     if (item.kind === "flowNode") {
       summary.flowCount++;
       summary.shape = merge(summary.shape, item.shape);
+    } else if (item.kind === "text") {
+      summary.textCount++;
+      summary.textSize = merge(summary.textSize, item.size);
     }
   }
   return summary;
@@ -155,12 +197,7 @@ export function RightPanel() {
   };
 
   const setTone = (tone: ToneName) =>
-    applyToSelection((item) =>
-      (item.kind === "flowNode" || item.kind === "note" || item.kind === "region") &&
-      item.tone !== tone
-        ? { ...item, tone }
-        : item,
-    );
+    applyToSelection((item) => ("tone" in item && item.tone !== tone ? { ...item, tone } : item));
 
   const setShape = (shape: FlowShape) =>
     applyToSelection((item) => {
@@ -270,7 +307,7 @@ export function RightPanel() {
             transition={{ duration: 0.2 }}
           >
             <h3 className="field-label">Şekil</h3>
-            <div className="segmented">
+            <div className="segmented shape-grid">
               {shapes.map((s) => (
                 <button
                   key={s.id}
@@ -280,6 +317,94 @@ export function RightPanel() {
                 >
                   {s.label}
                 </button>
+              ))}
+            </div>
+          </motion.section>
+        )}
+        {summary.textCount > 0 && (
+          <motion.section
+            key="text"
+            className="panel-section"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.2 }}
+          >
+            <h3 className="field-label">Metin boyutu</h3>
+            <div className="segmented">
+              {textSizes.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  className={summary.textSize === s.id ? "is-active" : ""}
+                  onClick={() =>
+                    applyToSelection((item) =>
+                      item.kind === "text" && item.size !== s.id ? { ...item, size: s.id } : item,
+                    )
+                  }
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          </motion.section>
+        )}
+        {summary.arrowCount > 0 && (
+          <motion.section
+            key="arrow"
+            className="panel-section"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.2 }}
+          >
+            <h3 className="field-label">Ok</h3>
+            <div className="segmented">
+              {arrowHeads.map((h) => (
+                <button
+                  key={h.id}
+                  type="button"
+                  className={summary.arrowHead === h.id ? "is-active" : ""}
+                  onClick={() =>
+                    applyToSelection((item) =>
+                      item.kind === "arrow" && item.head !== h.id ? { ...item, head: h.id } : item,
+                    )
+                  }
+                >
+                  {h.label}
+                </button>
+              ))}
+            </div>
+            <div className="segmented">
+              {[false, true].map((dashed) => (
+                <button
+                  key={String(dashed)}
+                  type="button"
+                  className={summary.arrowDashed === dashed ? "is-active" : ""}
+                  onClick={() =>
+                    applyToSelection((item) =>
+                      item.kind === "arrow" && item.dashed !== dashed ? { ...item, dashed } : item,
+                    )
+                  }
+                >
+                  {dashed ? "Kesikli" : "Düz"}
+                </button>
+              ))}
+            </div>
+            <div className="swatches">
+              {penColors.map((color) => (
+                <button
+                  key={color}
+                  type="button"
+                  className={`swatch round${summary.arrowColor === color ? " is-active" : ""}`}
+                  style={{ background: color, borderColor: color }}
+                  onClick={() =>
+                    applyToSelection((item) =>
+                      item.kind === "arrow" && item.color !== color ? { ...item, color } : item,
+                    )
+                  }
+                  aria-label={`Ok rengi ${color}`}
+                />
               ))}
             </div>
           </motion.section>
@@ -390,6 +515,12 @@ export function RightPanel() {
           </li>
           <li>
             <kbd>E</kbd> silgi · sekmede çift tık: yeniden adlandır
+          </li>
+          <li>
+            <kbd>T</kbd> metin · <kbd>L</kbd> ok (sürükle) · <kbd>K</kbd> kontrol listesi
+          </li>
+          <li>
+            <kbd>U</kbd> bağlantı kartı · <kbd>B</kbd> tablo
           </li>
         </ul>
       </section>

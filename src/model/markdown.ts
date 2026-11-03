@@ -1,12 +1,54 @@
 import type { JSONContent } from "@tiptap/react";
-import type { BoardDoc, EdgeItem, FlowNodeItem, NodeItem, RegionItem } from "./types";
+import { cardHeight } from "./factory";
+import type {
+  BoardDoc,
+  ChecklistItem,
+  EdgeItem,
+  FlowNodeItem,
+  NodeItem,
+  RegionItem,
+  TableItem,
+} from "./types";
 import { isEdgeItem, isNodeItem } from "./types";
 
-const shapeLabel: Record<FlowNodeItem["shape"], string> = {
+export const shapeLabel: Record<FlowNodeItem["shape"], string> = {
   terminal: "başlangıç/bitiş",
   process: "adım",
   decision: "karar",
+  ellipse: "elips",
+  database: "veritabanı",
+  document: "belge",
+  io: "girdi/çıktı",
+  cloud: "bulut",
+  actor: "aktör",
 };
+
+/** One line of plain text that cannot break a Markdown table or list. */
+function cell(text: string): string {
+  return text.replace(/\s*\r?\n\s*/g, " ").replace(/\|/g, "\\|");
+}
+
+export function checklistToMarkdown(item: ChecklistItem): string[] {
+  const done = item.items.filter((e) => e.done).length;
+  return [
+    `### ${cell(item.title || "Kontrol listesi")} (${done}/${item.items.length})`,
+    "",
+    ...item.items.map((e) => `- [${e.done ? "x" : " "}] ${cell(e.text)}`),
+  ];
+}
+
+export function tableToMarkdown(item: TableItem): string[] {
+  return [
+    `### ${cell(item.name || "tablo")}`,
+    "",
+    "| Kolon | Tür | PK | Boş olabilir | Not |",
+    "| --- | --- | --- | --- | --- |",
+    ...item.columns.map(
+      (c) =>
+        `| ${cell(c.name)} | ${cell(c.type)} | ${c.pk ? "✓" : ""} | ${c.nullable ? "evet" : "hayır"} | ${cell(c.note ?? "")} |`,
+    ),
+  ];
+}
 
 function inline(nodes: JSONContent[] | undefined): string {
   if (!nodes) return "";
@@ -76,7 +118,7 @@ export function noteToMarkdown(content: JSONContent): string {
 }
 
 function center(item: NodeItem): { x: number; y: number } {
-  const height = "height" in item ? item.height : 120;
+  const height = "height" in item ? item.height : item.kind === "note" ? 120 : cardHeight(item);
   return { x: item.x + item.width / 2, y: item.y + height / 2 };
 }
 
@@ -95,6 +137,10 @@ function nameOf(item: NodeItem | undefined): string {
   if (item.kind === "flowNode") return item.text || "(adsız adım)";
   if (item.kind === "note" || item.kind === "region") return item.title || "(adsız)";
   if (item.kind === "image") return item.alt || "resim";
+  if (item.kind === "text") return item.text || "(boş metin)";
+  if (item.kind === "checklist" || item.kind === "link") return item.title || "(adsız)";
+  if (item.kind === "table") return item.name || "(adsız tablo)";
+  if (item.kind === "arrow") return "ok";
   return "serbest çizim";
 }
 
@@ -150,6 +196,17 @@ function groupSection(
     const body = noteToMarkdown(note.content);
     if (body) lines.push(body, "");
   }
+  for (const member of members) {
+    if (member.kind === "text" && member.text.trim()) lines.push(member.text, "");
+    else if (member.kind === "checklist") lines.push(...checklistToMarkdown(member), "");
+    else if (member.kind === "link") {
+      const title = cell(member.title || member.url).replace(/[[\]]/g, "\\$&");
+      lines.push(
+        `- [${title}](<${member.url.replace(/[<>\s]/g, encodeURIComponent)}>)${member.note ? ` — ${cell(member.note)}` : ""}`,
+        "",
+      );
+    }
+  }
   for (const image of members) {
     if (image.kind !== "image") continue;
     // The picture itself lives inside the .rli file; Markdown only names it.
@@ -174,7 +231,13 @@ export function boardToMarkdown(board: BoardDoc, selectedIds?: ReadonlySet<strin
     .filter((n): n is RegionItem => n.kind === "region")
     .sort((a, b) => a.y - b.y || a.x - b.x);
   const content = nodes.filter(
-    (n) => n.kind === "flowNode" || n.kind === "note" || n.kind === "image",
+    (n) =>
+      n.kind === "flowNode" ||
+      n.kind === "note" ||
+      n.kind === "image" ||
+      n.kind === "text" ||
+      n.kind === "checklist" ||
+      n.kind === "link",
   );
   const placed = new Set<string>();
   for (const region of regions) {
@@ -186,7 +249,28 @@ export function boardToMarkdown(board: BoardDoc, selectedIds?: ReadonlySet<strin
   if (loose.length > 0)
     lines.push(...groupSection(regions.length > 0 ? "Bölge dışı" : null, loose, edges, all));
 
-  const references = edges.filter((e) => e.style === "reference");
+  const tables = nodes
+    .filter((n): n is TableItem => n.kind === "table")
+    .sort((a, b) => a.y - b.y || a.x - b.x);
+  const isTable = (id: string) => all.get(id)?.kind === "table";
+  const relations = edges.filter((e) => isTable(e.source) && isTable(e.target));
+  if (tables.length > 0) {
+    lines.push("## Veritabanı", "");
+    for (const table of tables) lines.push(...tableToMarkdown(table), "");
+    if (relations.length > 0) {
+      lines.push("### İlişkiler", "");
+      for (const rel of relations) {
+        lines.push(
+          `- ${cell(nameOf(all.get(rel.source)))} → ${cell(nameOf(all.get(rel.target)))}${rel.label ? ` (${cell(rel.label)})` : ""}`,
+        );
+      }
+      lines.push("");
+    }
+  }
+
+  const references = edges.filter(
+    (e) => e.style === "reference" && !(isTable(e.source) && isTable(e.target)),
+  );
   if (references.length > 0) {
     lines.push("## Referanslar", "");
     for (const ref of references) {
@@ -199,6 +283,8 @@ export function boardToMarkdown(board: BoardDoc, selectedIds?: ReadonlySet<strin
 
   const strokes = nodes.filter((n) => n.kind === "stroke").length;
   if (strokes > 0) lines.push(`_${strokes} serbest çizim metne çevrilmedi._`, "");
+  const arrows = nodes.filter((n) => n.kind === "arrow").length;
+  if (arrows > 0) lines.push(`_${arrows} serbest ok metne çevrilmedi._`, "");
 
   return `${lines
     .join("\n")

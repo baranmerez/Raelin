@@ -15,20 +15,26 @@ import {
   useStore,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
+import "../styles/tools.css";
 import { type DragEvent, useCallback, useMemo, useRef, useState } from "react";
 import { contentsOf } from "../commands/geometry";
-import { makeEdge } from "../model/factory";
+import { cardHeight, makeEdge } from "../model/factory";
 import type { BoardDoc, ConnectorType, EdgeItem, NodeItem } from "../model/types";
 import { isEdgeItem, isNodeItem } from "../model/types";
 import { mapItems, removeItems, useActiveBoard, useBoardStore } from "../state/boardStore";
 import { BottomBar } from "./BottomBar";
 import { FpsMeter } from "./FpsMeter";
 import { imageFiles, insertImages } from "./images";
+import { ArrowView } from "./nodes/ArrowView";
+import { ChecklistView } from "./nodes/ChecklistView";
 import { FlowNodeView } from "./nodes/FlowNodeView";
 import { ImageView } from "./nodes/ImageView";
+import { LinkView } from "./nodes/LinkView";
 import { NoteView } from "./nodes/NoteView";
 import { RegionView } from "./nodes/RegionView";
 import { StrokeView } from "./nodes/StrokeView";
+import { TableView } from "./nodes/TableView";
+import { TextView } from "./nodes/TextView";
 import { RaelinEdge } from "./RaelinEdge";
 import { ToolOverlay } from "./ToolOverlay";
 import { useClipboard } from "./useClipboard";
@@ -41,6 +47,11 @@ const nodeTypes = {
   region: RegionView,
   stroke: StrokeView,
   image: ImageView,
+  text: TextView,
+  arrow: ArrowView,
+  checklist: ChecklistView,
+  link: LinkView,
+  table: TableView,
 };
 const edgeTypes = { raelin: RaelinEdge };
 const inkColor = "#5b3a9e";
@@ -80,6 +91,14 @@ function toRfNode(item: NodeItem, selected: boolean, size: Size | undefined): No
       return { ...base, type: "stroke", width: item.width, height: item.height };
     case "image":
       return { ...base, type: "image", width: item.width, height: item.height };
+    case "arrow":
+      return { ...base, type: "arrow", width: item.width, height: item.height };
+    case "text":
+    case "checklist":
+    case "link":
+    case "table":
+      // Height follows the content, like notes.
+      return { ...base, type: item.kind, width: item.width, initialHeight: cardHeight(item) };
   }
 }
 
@@ -292,6 +311,10 @@ export function Canvas({ stress }: { stress: boolean }) {
               (item.kind === "region" || item.kind === "flowNode" || item.kind === "image")
             ) {
               return { ...next, width: Math.round(size.width), height: Math.round(size.height) };
+            }
+            if (size && !("height" in item) && item.kind !== "note") {
+              // Content-sized cards only take the new width; their height stays measured.
+              return { ...next, width: Math.round(size.width) };
             }
             return next;
           }),

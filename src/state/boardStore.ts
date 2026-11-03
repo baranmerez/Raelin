@@ -13,7 +13,12 @@ export type Tool =
   | "decision"
   | "terminal"
   | "note"
-  | "region";
+  | "region"
+  | "text"
+  | "arrow"
+  | "checklist"
+  | "link"
+  | "table";
 
 /** One undo step: the board before the change, when it happened and, for AI changes, who made it. */
 export interface Step {

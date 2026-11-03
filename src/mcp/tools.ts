@@ -207,7 +207,22 @@ export function createRaelinServer(): McpServer {
         boardId: z.string().optional().describe("Defaults to the active board."),
         regionId: z.string().optional(),
         ids: z.array(z.string()).max(maxLimit).optional(),
-        kinds: z.array(z.enum(["flowNode", "note", "region", "stroke", "image"])).optional(),
+        kinds: z
+          .array(
+            z.enum([
+              "flowNode",
+              "note",
+              "region",
+              "stroke",
+              "image",
+              "text",
+              "arrow",
+              "checklist",
+              "link",
+              "table",
+            ]),
+          )
+          .optional(),
         limit: z.number().int().min(1).max(maxLimit).optional(),
         cursor: z.number().int().min(0).optional(),
         textLimit: z.number().int().min(20).max(5000).optional(),

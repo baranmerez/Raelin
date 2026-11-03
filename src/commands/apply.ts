@@ -1,7 +1,27 @@
-import { makeEdge, makeFlowNode, makeNote, makeRegion, shapeSize } from "../model/factory";
+import {
+  makeChecklist,
+  makeEdge,
+  makeFlowNode,
+  makeLink,
+  makeNote,
+  makeRegion,
+  makeTable,
+  makeText,
+  shapeSize,
+} from "../model/factory";
+import { newId } from "../model/ids";
 import { markdownToDoc } from "../model/noteMarkdown";
 import { FormatError, validateItems } from "../model/serialize";
-import type { BoardDoc, BoardItem, EdgeItem, NodeItem, RegionItem } from "../model/types";
+import type {
+  BoardDoc,
+  BoardItem,
+  CardItem,
+  CheckEntry,
+  EdgeItem,
+  NodeItem,
+  RegionItem,
+  TableColumn,
+} from "../model/types";
 import { isNodeItem } from "../model/types";
 import { boundsOf, center, obstacles, overlaps, type Rect, rectOf, regionOf } from "./geometry";
 import { maxOpsPerBatch, type Op, type Place } from "./schema";
@@ -41,6 +61,96 @@ export function isDestructive(ops: readonly Op[]): boolean {
 }
 
 const verticalGap = 56;
+
+type AddOp = Extract<Op, { op: "add" }>;
+type UpdateOp = Extract<Op, { op: "update" }>;
+
+const contentFields = [
+  "text",
+  "title",
+  "markdown",
+  "shape",
+  "size",
+  "url",
+  "note",
+  "items",
+  "columns",
+] as const;
+
+/**
+ * Content fields each kind reads. The older kinds list everything they already warn
+ * about themselves, so only the card fields produce the generic warning there.
+ */
+const usedFields: Record<NodeItem["kind"], readonly string[]> = {
+  flowNode: ["text", "shape", "title", "markdown"],
+  note: ["title", "markdown", "text", "shape"],
+  region: ["title", "markdown", "text", "shape"],
+  image: ["title", "text", "shape", "markdown"],
+  stroke: contentFields,
+  arrow: contentFields,
+  text: ["text", "size"],
+  checklist: ["title", "items"],
+  link: ["url", "title", "note"],
+  table: ["title", "columns"],
+};
+
+function unusedFields(op: AddOp | UpdateOp, used: readonly string[]): string[] {
+  return contentFields.filter((f) => op[f] !== undefined && !used.includes(f));
+}
+
+/** Entries keep their ids by position, so an edit does not look like a new list. */
+function checkEntries(
+  list: NonNullable<AddOp["items"]>,
+  previous: readonly CheckEntry[] = [],
+): CheckEntry[] {
+  return list.map((e, i) => ({
+    id: previous[i]?.id ?? newId("c"),
+    text: e.text,
+    done: e.done ?? false,
+  }));
+}
+
+/** Columns keep their ids by name; a key column is not nullable unless asked. */
+function tableColumns(
+  list: NonNullable<AddOp["columns"]>,
+  previous: readonly TableColumn[] = [],
+): TableColumn[] {
+  const byName = new Map(previous.map((c) => [c.name, c.id]));
+  const taken = new Set<string>();
+  return list.map((c) => {
+    let id = byName.get(c.name);
+    if (!id || taken.has(id)) id = newId("col");
+    taken.add(id);
+    const pk = c.pk ?? false;
+    return {
+      id,
+      name: c.name,
+      type: c.type,
+      pk,
+      nullable: c.nullable ?? !pk,
+      ...(c.note ? { note: c.note } : {}),
+    };
+  });
+}
+
+/** New card item at the origin, or null for the older kinds. */
+function makeCard(op: AddOp, index: number): CardItem | null {
+  switch (op.kind) {
+    case "text":
+      return makeText(0, 0, op.text ?? "Metin", op.size, op.tone);
+    case "checklist": {
+      const list = makeChecklist(0, 0, op.title ?? "Kontrol listesi", [], op.tone);
+      return { ...list, items: checkEntries(op.items ?? []) };
+    }
+    case "link":
+      if (!op.url) throw new CommandError("INVALID", "Bağlantı kartı için url gerekli.", index);
+      return makeLink(0, 0, op.url, op.title ?? "", op.note ?? "", op.tone);
+    case "table":
+      return makeTable(0, 0, op.title ?? "yeni_tablo", tableColumns(op.columns ?? []), op.tone);
+    default:
+      return null;
+  }
+}
 
 /** Finds a free spot for a rect, starting at `start` and stepping down (then right). */
 function freeSpot(start: Rect, taken: Rect[]): Rect {
@@ -176,7 +286,13 @@ export function applyOps(board: BoardDoc, ops: readonly Op[]): ApplyResult {
           throw new CommandError("INVALID", `ref tekrarlandı: ${op.ref}`, index);
         let item: NodeItem;
         const host = op.kind === "region" ? undefined : hostRegion(op.place, index);
-        if (op.kind === "flowNode") {
+        const extra = unusedFields(op, usedFields[op.kind]);
+        if (extra.length > 0) warnings.push(`${op.kind}: ${extra.join(", ")} kullanılmaz.`);
+        const card = makeCard(op, index);
+        if (card) {
+          const pos = position(op.place, rectOf(card), index);
+          item = { ...card, x: pos.x, y: pos.y };
+        } else if (op.kind === "flowNode") {
           const shape = op.shape ?? "process";
           const pos = position(op.place, shapeSize[shape], index);
           const node = makeFlowNode(shape, 0, 0, op.text ?? "", op.tone);
@@ -202,10 +318,41 @@ export function applyOps(board: BoardDoc, ops: readonly Op[]): ApplyResult {
       }
       case "update": {
         const item = findNode(op.id, index);
-        if (item.kind === "stroke")
-          throw new CommandError("INVALID", "Serbest çizim düzenlenemez.", index);
+        if (item.kind === "stroke" || item.kind === "arrow")
+          throw new CommandError("INVALID", "Serbest çizim ve ok düzenlenemez.", index);
         let next: NodeItem = item;
-        if (item.kind === "flowNode") {
+        const extra = unusedFields(op, usedFields[item.kind]);
+        if (extra.length > 0) warnings.push(`${op.id}: ${extra.join(", ")} kullanılmaz.`);
+        if (item.kind === "text") {
+          next = {
+            ...item,
+            text: op.text ?? item.text,
+            size: op.size ?? item.size,
+            tone: op.tone ?? item.tone,
+          };
+        } else if (item.kind === "checklist") {
+          next = {
+            ...item,
+            title: op.title ?? item.title,
+            tone: op.tone ?? item.tone,
+            items: op.items ? checkEntries(op.items, item.items) : item.items,
+          };
+        } else if (item.kind === "link") {
+          next = {
+            ...item,
+            url: op.url ?? item.url,
+            title: op.title ?? item.title,
+            note: op.note ?? item.note,
+            tone: op.tone ?? item.tone,
+          };
+        } else if (item.kind === "table") {
+          next = {
+            ...item,
+            name: op.title ?? item.name,
+            tone: op.tone ?? item.tone,
+            columns: op.columns ? tableColumns(op.columns, item.columns) : item.columns,
+          };
+        } else if (item.kind === "flowNode") {
           if (op.title !== undefined || op.markdown !== undefined) {
             warnings.push(`${op.id}: akış adımında yalnız text, tone ve shape kullanılır.`);
           }

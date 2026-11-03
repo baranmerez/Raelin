@@ -1,7 +1,7 @@
 import { Handle, type Node, type NodeProps, Position } from "@xyflow/react";
 import { type CSSProperties, memo, useEffect, useRef, useState } from "react";
 import { tones } from "../../model/tones";
-import type { FlowNodeItem } from "../../model/types";
+import type { FlowNodeItem, FlowShape } from "../../model/types";
 import { patchItem, useBoardStore } from "../../state/boardStore";
 
 export type FlowRfNode = Node<{ item: FlowNodeItem }, "flowNode">;
@@ -107,6 +107,39 @@ export function InlineText({
   );
 }
 
+/** Outlines drawn in a 100×100 box that stretches with the node. */
+const outlines: Partial<Record<FlowShape, { body: string; detail?: string }>> = {
+  database: {
+    body: "M2,14 A48,12 0 0 1 98,14 V86 A48,12 0 0 1 2,86 Z",
+    detail: "M2,14 A48,12 0 0 0 98,14",
+  },
+  document: { body: "M2,2 H98 V86 C80,74 66,98 44,92 C28,88 14,84 2,90 Z" },
+  io: { body: "M18,2 H98 L82,98 H2 Z" },
+  cloud: {
+    body: "M26,92 C10,92 2,80 6,67 C0,54 9,39 23,41 C23,22 41,11 55,20 C63,6 87,8 89,29 C100,33 101,55 92,63 C100,78 88,94 74,92 Z",
+  },
+};
+
+function ShapeOutline({ shape }: { shape: FlowShape }) {
+  const outline = outlines[shape];
+  if (!outline) return null;
+  return (
+    <svg
+      className="shape-outline"
+      viewBox="0 0 100 100"
+      preserveAspectRatio="none"
+      aria-hidden="true"
+    >
+      {/* Offset copy instead of a CSS drop-shadow filter, which is costly to repaint. */}
+      <path className="outline-shadow" d={outline.body} transform="translate(0 4)" />
+      <path className="outline-body" d={outline.body} vectorEffect="non-scaling-stroke" />
+      {outline.detail && (
+        <path className="outline-detail" d={outline.detail} vectorEffect="non-scaling-stroke" />
+      )}
+    </svg>
+  );
+}
+
 export const FlowNodeView = memo(function FlowNodeView({ data, selected }: NodeProps<FlowRfNode>) {
   const { item } = data;
   const commit = useBoardStore((s) => s.commit);
@@ -127,6 +160,13 @@ export const FlowNodeView = memo(function FlowNodeView({ data, selected }: NodeP
           {/* Offset copy instead of a CSS drop-shadow filter, which is costly to repaint. */}
           <polygon className="decision-shadow" points="50,6 98,54 50,102 2,54" />
           <polygon points="50,2 98,50 50,98 2,50" vectorEffect="non-scaling-stroke" />
+        </svg>
+      )}
+      <ShapeOutline shape={item.shape} />
+      {item.shape === "actor" && (
+        <svg className="actor-figure" viewBox="0 0 40 60" aria-hidden="true">
+          <circle cx="20" cy="11" r="8" />
+          <path d="M20 19v19M6 27h28M20 38 9 56M20 38l11 18" />
         </svg>
       )}
       <InlineText className="flow-node-text" value={item.text} onCommit={rename} />

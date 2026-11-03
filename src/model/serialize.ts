@@ -46,9 +46,132 @@ function parseJson(text: string, what: string): unknown {
 const isNum = (v: unknown) => typeof v === "number" && Number.isFinite(v);
 const isStr = (v: unknown) => typeof v === "string";
 const tones = new Set(["lilac", "peach", "periwinkle", "sage", "butter", "paper"]);
-const shapes = new Set(["terminal", "process", "decision"]);
+const shapes = new Set([
+  "terminal",
+  "process",
+  "decision",
+  "ellipse",
+  "database",
+  "document",
+  "io",
+  "cloud",
+  "actor",
+]);
+const textSizes = new Set(["s", "m", "l"]);
+const arrowHeads = new Set(["end", "both", "none"]);
 
 const isOptStr = (v: unknown) => v === undefined || isStr(v);
+const isBool = (v: unknown) => typeof v === "boolean";
+const isText = (v: unknown, max: number) => isStr(v) && (v as string).length <= max;
+const isPlainObject = (v: unknown): v is Record<string, unknown> =>
+  !!v && typeof v === "object" && !Array.isArray(v);
+const onlyKeys = (v: object, keys: readonly string[]) =>
+  Object.keys(v).every((key) => keys.includes(key));
+const isHexColor = (v: unknown) => isStr(v) && /^#[0-9a-fA-F]{6}$/.test(v as string);
+
+/** Bounds for the newer card kinds, so a hostile file cannot blow up rendering. */
+export const limits = { label: 2000, short: 200, type: 60, note: 2000, url: 2000, rows: 200 };
+
+/** Only absolute http(s) links; anything else (javascript:, file:, data:) is refused. */
+export function isWebUrl(value: unknown): boolean {
+  if (!isText(value, limits.url)) return false;
+  try {
+    const url = new URL(value as string);
+    return (url.protocol === "http:" || url.protocol === "https:") && url.hostname !== "";
+  } catch {
+    return false;
+  }
+}
+
+const base = ["id", "kind", "x", "y", "width"] as const;
+const cardKeys: Record<string, readonly string[]> = {
+  text: [...base, "text", "size", "tone"],
+  arrow: [...base, "height", "start", "end", "head", "dashed", "color"],
+  checklist: [...base, "title", "items", "tone"],
+  link: [...base, "url", "title", "note", "tone"],
+  table: [...base, "name", "columns", "tone"],
+};
+
+/** Rows of a checklist or table: objects with exactly the given keys and unique ids. */
+function rowsProblem(
+  rows: unknown,
+  keys: readonly string[],
+  rowOk: (row: Record<string, unknown>) => boolean,
+): boolean {
+  if (!Array.isArray(rows) || rows.length > limits.rows) return true;
+  const ids = new Set<string>();
+  for (const row of rows) {
+    if (!isPlainObject(row) || !onlyKeys(row, keys) || !isStr(row.id)) return true;
+    if (!isSafeId(row.id) || ids.has(row.id) || !rowOk(row)) return true;
+    ids.add(row.id);
+  }
+  return false;
+}
+
+function cardProblem(item: BoardItem): string | null {
+  const keys = cardKeys[item.kind];
+  if (keys && !onlyKeys(item, keys)) return "bilinmeyen alan";
+  switch (item.kind) {
+    case "text":
+      return isText(item.text, limits.label) && textSizes.has(item.size) && tones.has(item.tone)
+        ? null
+        : "metin alanları geçersiz";
+    case "arrow": {
+      const inBox = (p: unknown) =>
+        Array.isArray(p) &&
+        p.length === 2 &&
+        p.every(isNum) &&
+        p[0] >= 0 &&
+        p[0] <= item.width &&
+        p[1] >= 0 &&
+        p[1] <= item.height;
+      if (!isNum(item.height) || item.height <= 0) return "yükseklik geçersiz";
+      return inBox(item.start) &&
+        inBox(item.end) &&
+        arrowHeads.has(item.head) &&
+        isBool(item.dashed) &&
+        isHexColor(item.color)
+        ? null
+        : "ok alanları geçersiz";
+    }
+    case "checklist":
+      if (!isText(item.title, limits.short) || !tones.has(item.tone)) {
+        return "kontrol listesi alanları geçersiz";
+      }
+      return rowsProblem(
+        item.items,
+        ["id", "text", "done"],
+        (r) => isText(r.text, limits.label) && isBool(r.done),
+      )
+        ? "kontrol listesi maddeleri geçersiz"
+        : null;
+    case "link":
+      if (!isWebUrl(item.url)) return "bağlantı adresi http(s) olmalı";
+      return isText(item.title, limits.short) &&
+        isText(item.note, limits.note) &&
+        tones.has(item.tone)
+        ? null
+        : "bağlantı kartı alanları geçersiz";
+    case "table":
+      if (!isText(item.name, limits.short) || !tones.has(item.tone)) {
+        return "tablo alanları geçersiz";
+      }
+      return rowsProblem(
+        item.columns,
+        ["id", "name", "type", "pk", "nullable", "note"],
+        (c) =>
+          isText(c.name, limits.short) &&
+          isText(c.type, limits.type) &&
+          isBool(c.pk) &&
+          isBool(c.nullable) &&
+          (c.note === undefined || isText(c.note, limits.note)),
+      )
+        ? "tablo kolonları geçersiz"
+        : null;
+    default:
+      return null;
+  }
+}
 
 /**
  * Shape of a Tiptap document node: what the note renderer walks. Deeply nested or
@@ -121,6 +244,12 @@ function itemProblem(item: BoardItem): string | null {
         return "resim alanları geçersiz";
       }
       return isNum(item.height) && item.height > 0 ? null : "yükseklik geçersiz";
+    case "text":
+    case "arrow":
+    case "checklist":
+    case "link":
+    case "table":
+      return cardProblem(item);
     default:
       return `bilinmeyen öğe türü: ${String((item as { kind?: unknown }).kind)}`;
   }

@@ -2,10 +2,20 @@ import { useReactFlow, useViewport } from "@xyflow/react";
 import { getStroke } from "perfect-freehand";
 import { type PointerEvent, useEffect, useRef, useState } from "react";
 import { strokesAt } from "../commands/geometry";
-import { makeFlowNode, makeNote, makeRegion } from "../model/factory";
+import {
+  makeArrow,
+  makeChecklist,
+  makeFlowNode,
+  makeLink,
+  makeNote,
+  makeRegion,
+  makeTable,
+  makeText,
+} from "../model/factory";
 import { newId } from "../model/ids";
 import type { BoardItem, StrokeItem } from "../model/types";
 import { removeItems, type Tool, useBoardStore } from "../state/boardStore";
+import { arrowHeadPoints } from "./nodes/ArrowView";
 import { outlinePath, strokeOptions } from "./nodes/StrokeView";
 
 type Point = [number, number, number];
@@ -20,6 +30,17 @@ export function placeItem(tool: Tool, x: number, y: number): BoardItem | null {
       return makeNote(x, y, "Yeni not");
     case "region":
       return makeRegion(x, y, "Yeni bölge", "sage");
+    case "text":
+      return makeText(x, y);
+    case "checklist":
+      return makeChecklist(x, y);
+    case "link":
+      return makeLink(x, y);
+    case "table":
+      return makeTable(x, y);
+    case "arrow":
+      // A click without a drag leaves a default arrow to adjust later.
+      return makeArrow({ x: x - 80, y }, { x: x + 80, y }, useBoardStore.getState().penColor);
     default:
       return null;
   }
@@ -41,6 +62,7 @@ export function ToolOverlay() {
   const overlay = useRef<HTMLDivElement>(null);
   const [points, setPoints] = useState<Point[] | null>(null);
   const [erasing, setErasing] = useState(false);
+  const [line, setLine] = useState<{ from: [number, number]; to: [number, number] } | null>(null);
   const lastErase = useRef<{ x: number; y: number } | null>(null);
 
   // Leaving the eraser mid-drag (Escape, shortcut) never gets a pointer-up: close the
@@ -127,13 +149,32 @@ export function ToolOverlay() {
       setPoints([local(e)]);
       return;
     }
+    if (tool === "arrow") {
+      e.currentTarget.setPointerCapture(e.pointerId);
+      const [x, y] = local(e);
+      setLine({ from: [x, y], to: [x, y] });
+      return;
+    }
     const pos = screenToFlowPosition({ x: e.clientX, y: e.clientY });
-    const item = placeItem(tool, pos.x, pos.y);
+    place(placeItem(tool, pos.x, pos.y));
+  };
+
+  const place = (item: BoardItem | null) => {
     if (item) {
       commit((b) => ({ ...b, items: [...b.items, item] }));
       setSelection([item.id]);
     }
     setTool("select");
+  };
+
+  const finishLine = (drawn: { from: [number, number]; to: [number, number] }) => {
+    const rect = overlay.current?.getBoundingClientRect();
+    if (!rect) return;
+    const flow = ([x, y]: [number, number]) =>
+      screenToFlowPosition({ x: x + rect.left, y: y + rect.top });
+    const from = flow(drawn.from);
+    const short = Math.hypot(drawn.to[0] - drawn.from[0], drawn.to[1] - drawn.from[1]) < 8;
+    place(short ? placeItem("arrow", from.x, from.y) : makeArrow(from, flow(drawn.to), penColor));
   };
 
   const preview =
@@ -154,16 +195,23 @@ export function ToolOverlay() {
       onPointerDown={onPointerDown}
       onPointerMove={(e) => {
         if (points) setPoints([...points, local(e)]);
+        if (line) {
+          const [x, y] = local(e);
+          setLine({ from: line.from, to: [x, y] });
+        }
         if (erasing) eraseAt(e);
       }}
       onPointerUp={() => {
         if (points) finishStroke(points);
         setPoints(null);
+        if (line) finishLine(line);
+        setLine(null);
         if (erasing) endGesture();
         setErasing(false);
       }}
       onPointerCancel={() => {
         setPoints(null);
+        setLine(null);
         if (erasing) endGesture();
         setErasing(false);
       }}
@@ -171,6 +219,20 @@ export function ToolOverlay() {
       {preview && (
         <svg className="stroke-preview" aria-hidden="true">
           <path d={preview} fill={penColor} />
+        </svg>
+      )}
+      {line && (
+        <svg className="stroke-preview" aria-hidden="true">
+          <line
+            x1={line.from[0]}
+            y1={line.from[1]}
+            x2={line.to[0]}
+            y2={line.to[1]}
+            stroke={penColor}
+            strokeWidth={2.4 * zoom}
+            strokeLinecap="round"
+          />
+          <polygon points={arrowHeadPoints(line.from, line.to, 12 * zoom)} fill={penColor} />
         </svg>
       )}
     </div>

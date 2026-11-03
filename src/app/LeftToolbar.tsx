@@ -11,6 +11,11 @@ export const toolList: { tool: Tool; icon: IconName; label: string; key: string 
   { tool: "terminal", icon: "terminal", label: "Başlangıç / bitiş", key: "O" },
   { tool: "note", icon: "note", label: "Not", key: "N" },
   { tool: "region", icon: "region", label: "Bölge", key: "F" },
+  { tool: "text", icon: "text", label: "Metin", key: "T" },
+  { tool: "arrow", icon: "arrow", label: "Ok / çizgi (sürükle)", key: "L" },
+  { tool: "checklist", icon: "checklist", label: "Kontrol listesi", key: "K" },
+  { tool: "link", icon: "link", label: "Bağlantı kartı", key: "U" },
+  { tool: "table", icon: "table", label: "Tablo", key: "B" },
 ];
 
 export function LeftToolbar() {
