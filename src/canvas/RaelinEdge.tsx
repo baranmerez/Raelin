@@ -95,6 +95,7 @@ export const RaelinEdge = memo(function RaelinEdge(props: EdgeProps<RaelinRfEdge
             type="button"
             className={`edge-label text-button nodrag nopan${item.label ? "" : " is-empty"}${selected ? " is-selected" : ""}`}
             style={labelStyle}
+            data-edge-label={id}
             title="Etiketi düzenlemek için çift tıkla veya F2"
             onDoubleClick={(e) => {
               e.stopPropagation();

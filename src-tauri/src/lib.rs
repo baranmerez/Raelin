@@ -31,6 +31,8 @@ pub fn run() {
             workspace::probe_workspace,
             workspace::write_workspace,
             workspace::write_markdown,
+            workspace::pick_image_file,
+            workspace::write_image_file,
             workspace::read_asset,
             workspace::write_asset,
             workspace::copy_assets,

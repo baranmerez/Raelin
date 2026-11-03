@@ -276,31 +276,77 @@ pub async fn pick_workspace_dir(
     Ok(Some(dir.to_string_lossy().into_owned()))
 }
 
-/// Native save dialog for a Markdown export; the returned path may be written once.
-#[tauri::command]
-pub async fn pick_markdown_file(
-    app: AppHandle,
-    state: State<'_, Allowed>,
+/// Native save dialog for an export; the returned path may be written once, and only
+/// when it has the expected extension.
+fn pick_export(
+    app: &AppHandle,
+    state: &Allowed,
     default_name: String,
+    label: &str,
+    ext: &str,
 ) -> Result<Option<String>, String> {
     let Some(picked) = app
         .dialog()
         .file()
-        .add_filter("Markdown", &["md"])
+        .add_filter(label, &[ext])
         .set_file_name(default_name)
         .blocking_save_file()
     else {
         return Ok(None);
     };
     let path = picked.into_path().map_err(|e| e.to_string())?;
-    let is_md = path
+    let matches = path
         .extension()
-        .is_some_and(|ext| ext.eq_ignore_ascii_case("md"));
-    if !is_md {
-        return Err("Yalnız .md dosyasına kaydedilebilir.".into());
+        .is_some_and(|found| found.eq_ignore_ascii_case(ext));
+    if !matches {
+        return Err(format!("Yalnız .{ext} dosyasına kaydedilebilir."));
     }
     lock(&state.files)?.insert(path.clone());
     Ok(Some(path.to_string_lossy().into_owned()))
+}
+
+#[tauri::command]
+pub async fn pick_markdown_file(
+    app: AppHandle,
+    state: State<'_, Allowed>,
+    default_name: String,
+) -> Result<Option<String>, String> {
+    pick_export(&app, &state, default_name, "Markdown", "md")
+}
+
+/// `kind` is "png" or "svg".
+#[tauri::command]
+pub async fn pick_image_file(
+    app: AppHandle,
+    state: State<'_, Allowed>,
+    default_name: String,
+    kind: String,
+) -> Result<Option<String>, String> {
+    let label = match kind.as_str() {
+        "png" => "PNG resmi",
+        "svg" => "SVG resmi",
+        _ => return Err(format!("Desteklenmeyen biçim: {kind}")),
+    };
+    pick_export(&app, &state, default_name, label, &kind)
+}
+
+/// Writes an exported picture to a path picked with `pick_image_file`. Raw body like
+/// `write_asset`; the path comes percent-encoded in `x-path`.
+#[tauri::command]
+pub fn write_image_file(
+    state: State<'_, Allowed>,
+    request: tauri::ipc::Request<'_>,
+) -> Result<(), String> {
+    let tauri::ipc::InvokeBody::Raw(bytes) = request.body() else {
+        return Err("Resim baytları bekleniyordu.".into());
+    };
+    let path = request
+        .headers()
+        .get("x-path")
+        .and_then(|v| v.to_str().ok())
+        .ok_or("x-path başlığı eksik.")?;
+    let target = state.take_file(&percent_decode(path)?)?;
+    write_atomic(&target, bytes)
 }
 
 /// The last folder Raelin itself read or wrote, re-approved for this run.

@@ -1,3 +1,4 @@
+import { useReactFlow } from "@xyflow/react";
 import { AnimatePresence, motion } from "motion/react";
 import { useState } from "react";
 import type { BackgroundKind } from "../model/types";
@@ -6,6 +7,7 @@ import { useBoardStore } from "../state/boardStore";
 import { Icon } from "../ui/Icon";
 import { menuMotion, useDismiss } from "../ui/menu";
 import { copyMarkdown, openNow, saveMarkdown, saveNow } from "./actions";
+import { exportBoardImage, type ImageKind } from "./exportImage";
 
 const backgroundLabel: Record<BackgroundKind, string> = {
   dots: "Noktalı",
@@ -29,6 +31,11 @@ export function TopBar() {
   const [exportOpen, setExportOpen] = useState(false);
   const themeRef = useDismiss(themeOpen, () => setThemeOpen(false));
   const exportRef = useDismiss(exportOpen, () => setExportOpen(false));
+  const { getNodes } = useReactFlow();
+  const exportImage = (kind: ImageKind) => {
+    setExportOpen(false);
+    void exportBoardImage(kind, getNodes());
+  };
 
   return (
     <header className="top-bar">
@@ -155,6 +162,14 @@ export function TopBar() {
               >
                 <Icon name="file" size={18} />
                 Markdown dosyası kaydet
+              </button>
+              <button type="button" className="menu-item" onClick={() => exportImage("png")}>
+                <Icon name="image" size={18} />
+                PNG resmi kaydet
+              </button>
+              <button type="button" className="menu-item" onClick={() => exportImage("svg")}>
+                <Icon name="image" size={18} />
+                SVG resmi kaydet
               </button>
               <p className="menu-hint">Seçim varsa yalnız seçili öğeler aktarılır.</p>
             </motion.div>

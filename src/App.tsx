@@ -180,10 +180,10 @@ export default function App() {
 
   return (
     <div className="app">
-      <TopBar />
-      <BoardTabs />
-      {/* The panel reads measured node sizes, so the provider spans the whole workbench. */}
+      {/* Panel and top bar read canvas state (node sizes, export), so the provider wraps all. */}
       <ReactFlowProvider>
+        <TopBar />
+        <BoardTabs />
         <div className="workbench">
           <LeftToolbar />
           <Canvas stress={stressCount > 0} />
