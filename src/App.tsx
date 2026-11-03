@@ -2,7 +2,7 @@ import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ReactFlowProvider } from "@xyflow/react";
 import { useEffect, useState } from "react";
-import { openNow, saveNow } from "./app/actions";
+import { newNow, openNow, saveNow } from "./app/actions";
 import { BoardTabs } from "./app/BoardTabs";
 import { LeftToolbar, toolList } from "./app/LeftToolbar";
 import { RightPanel } from "./app/RightPanel";
@@ -14,7 +14,9 @@ import { seedWorkspace, stressBoard } from "./model/seed";
 import { parseWorkspaceFile, serializeWorkspaceFile } from "./model/serialize";
 import type { Workspace } from "./model/types";
 import { formatVersion } from "./model/types";
+import { emptyWorkspace } from "./model/workspace";
 import {
+  askUnsaved,
   clearRecovery,
   confirmAction,
   isDesktop,
@@ -91,7 +93,7 @@ async function initialWorkspace(): Promise<Startup> {
         if (recovered) clearRecovery();
         return { workspace, origin, saved: true };
       } catch (error) {
-        const fallback = recovered ?? { workspace: seedWorkspace(), origin: null, saved: true };
+        const fallback = recovered ?? { workspace: firstWorkspace(), origin: null, saved: true };
         return { ...fallback, notice: `"${name}" açılamadı: ${String(error)}` };
       }
     }
@@ -112,7 +114,20 @@ async function initialWorkspace(): Promise<Startup> {
       // File moved or broken: fall back to the example instead of failing to start.
     }
   }
-  return { workspace: seedWorkspace(), origin: null, saved: true };
+  return { workspace: firstWorkspace(), origin: null, saved: true };
+}
+
+const welcomedKey = "raelin.welcomed.v1";
+
+/** The example workspace on the very first start, an empty one after that. */
+function firstWorkspace(): Workspace {
+  try {
+    if (localStorage.getItem(welcomedKey)) return emptyWorkspace();
+    localStorage.setItem(welcomedKey, "1");
+  } catch {
+    // Storage blocked: showing the example again is harmless.
+  }
+  return seedWorkspace();
 }
 
 function isTyping(target: EventTarget | null): boolean {
@@ -128,6 +143,11 @@ function useShortcuts() {
       if (mod && e.key.toLowerCase() === "s") {
         e.preventDefault();
         void saveNow({ saveAs: e.shiftKey });
+        return;
+      }
+      if (mod && !e.shiftKey && e.key.toLowerCase() === "n") {
+        e.preventDefault();
+        void newNow();
         return;
       }
       if (mod && e.key.toLowerCase() === "o") {
@@ -197,11 +217,14 @@ function useCloseGuard(enabled: boolean) {
       .onCloseRequested(async (event) => {
         const s = useBoardStore.getState();
         if (s.workspace === s.savedWorkspace) return;
+        // Written now in case the app is killed while the question is open.
         writeRecovery(s.workspace, s.origin);
-        const close = await confirmAction(
-          "Kaydedilmemiş değişiklikler var. Kaydetmeden kapatılsın mı? Panolar kurtarma kopyasında kalır, kaydedilmemiş resimler kaybolur.",
+        const choice = await askUnsaved(
+          "Kaydedilmemiş değişiklikler var. Kapatmadan önce kaydedilsin mi?",
         );
-        if (!close) event.preventDefault();
+        if (choice === "cancel") event.preventDefault();
+        else if (choice === "discard") clearRecovery();
+        else if (!(await saveNow())) event.preventDefault();
       })
       .then((fn) => {
         if (disposed) fn();

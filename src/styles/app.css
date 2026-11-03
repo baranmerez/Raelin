@@ -129,11 +129,51 @@ button {
 }
 
 .workspace-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 320px;
   margin: 0;
-  white-space: nowrap;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
   font-size: 24px;
   font-weight: 700;
   letter-spacing: -0.01em;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.workspace-title:hover,
+.workspace-title[aria-expanded="true"] {
+  background: var(--paper-2);
+}
+
+.workspace-title > .icon {
+  flex-shrink: 0;
+  color: var(--ink-soft);
+}
+
+.workspace-title-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.workspace-title-input {
+  width: 260px;
+  padding: 4px 8px;
+  border: 1px solid var(--violet);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 22px;
+  font-weight: 700;
+  outline: none;
 }
 
 .top-bar > .icon {
@@ -1501,16 +1541,46 @@ kbd {
   color: var(--ink-soft);
 }
 
-/* ---------- Save split button ---------- */
+/* ---------- File menu ---------- */
 
-.split-button {
-  display: flex;
-  align-items: center;
+.file-menu {
+  min-width: 300px;
+  max-width: 380px;
 }
 
-.split-button .split-toggle {
-  margin-left: -8px;
-  padding-inline: 6px;
+.menu-section {
+  margin: 8px 10px 2px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.menu-divider {
+  height: 1px;
+  margin: 6px 4px;
+  background: var(--line);
+}
+
+.recent-item {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  padding-block: 6px;
+}
+
+.recent-name,
+.recent-folder {
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.recent-folder {
+  font-size: 12px;
+  color: var(--ink-soft);
 }
 
 .menu-kbd {

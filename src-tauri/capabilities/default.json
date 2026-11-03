@@ -3,5 +3,10 @@
   "identifier": "default",
   "description": "Main window: confirm dialogs and closing after the unsaved-changes question. File pickers and file I/O run in Rust commands that check an allowlist of user-picked paths.",
   "windows": ["main"],
-  "permissions": ["core:default", "core:window:allow-destroy", "dialog:allow-ask"]
+  "permissions": [
+    "core:default",
+    "core:window:allow-destroy",
+    "dialog:allow-ask",
+    "dialog:allow-message"
+  ]
 }

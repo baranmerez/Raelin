@@ -1,7 +1,8 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
-import { ask } from "@tauri-apps/plugin-dialog";
+import { ask, message } from "@tauri-apps/plugin-dialog";
 import { parseWorkspaceFile, serializeWorkspaceFile } from "../model/serialize";
 import type { Workspace } from "../model/types";
+import { fileTitle } from "../model/workspace";
 import { encodeAssets, loadAssets } from "./assets";
 
 export const isDesktop = isTauri();
@@ -14,18 +15,35 @@ export interface WorkspaceOrigin {
 
 export interface SaveResult {
   origin: WorkspaceOrigin;
+  /** The workspace as written: its title follows the file name. */
+  written: Workspace;
   /** Pictures the boards use that are not in memory (e.g. lost with unsaved edits). */
   missingAssets: string[];
 }
 
-export async function confirmAction(message: string): Promise<boolean> {
-  if (!isDesktop) return window.confirm(message);
-  return ask(message, {
+export async function confirmAction(text: string): Promise<boolean> {
+  if (!isDesktop) return window.confirm(text);
+  return ask(text, {
     title: "Raelin",
     kind: "warning",
     okLabel: "Devam",
     cancelLabel: "Vazgeç",
   });
+}
+
+export type UnsavedChoice = "save" | "discard" | "cancel";
+
+/** Kaydet / Kaydetme / Vazgeç before unsaved work would be replaced or closed. */
+export async function askUnsaved(text: string): Promise<UnsavedChoice> {
+  if (!isDesktop) {
+    return window.confirm(`${text} Kaydetmeden devam edilsin mi?`) ? "discard" : "cancel";
+  }
+  const labels = { yes: "Kaydet", no: "Kaydetme", cancel: "Vazgeç" };
+  const answer = await message(text, { title: "Raelin", kind: "warning", buttons: labels });
+  // Custom buttons answer with their label; keep the default names as a fallback.
+  if (answer === labels.yes || answer === "Yes") return "save";
+  if (answer === labels.no || answer === "No") return "discard";
+  return "cancel";
 }
 
 function suggestedName(workspace: Workspace): string {
@@ -66,12 +84,18 @@ export async function saveWorkspace(
     }
   }
 
-  const { assets, missing } = await encodeAssets(workspace);
-  const bytes = new TextEncoder().encode(serializeWorkspaceFile(workspace, assets));
+  // The file name is the workspace's name, also inside the file.
+  const title = fileTitle(path);
+  const written =
+    workspace.manifest.title === title
+      ? workspace
+      : { ...workspace, manifest: { ...workspace.manifest, title } };
+  const { assets, missing } = await encodeAssets(written);
+  const bytes = new TextEncoder().encode(serializeWorkspaceFile(written, assets));
   const stamp = await invoke<string>("write_workspace_file", bytes, {
     headers: { "x-path": encodeURIComponent(path) },
   });
-  return { origin: { path, stamp }, missingAssets: missing };
+  return { origin: { path, stamp }, written, missingAssets: missing };
 }
 
 /** Reads and validates a workspace file the user picked (or Raelin remembered). */
@@ -161,6 +185,21 @@ export async function readLaunchPath(): Promise<string | null> {
   } catch {
     return null;
   }
+}
+
+/** Recent workspace files, newest first, approved by Rust for this run. */
+export async function readRecentPaths(): Promise<string[]> {
+  if (!isDesktop) return [];
+  try {
+    return await invoke<string[]>("recent_workspaces");
+  } catch {
+    return [];
+  }
+}
+
+/** Renames the workspace file in its folder; returns the new path. */
+export function renameWorkspaceFile(path: string, name: string): Promise<string> {
+  return invoke<string>("rename_workspace_file", { path, name });
 }
 
 /** Last workspace file Raelin itself read or wrote (stored by Rust, not by the page). */
