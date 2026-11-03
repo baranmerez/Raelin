@@ -278,8 +278,10 @@ export const useBoardStore = create<BoardState>()((set, get) => ({
       return {
         ...withBoard(s, next),
         history: { ...s.history, [boardId]: pushPast(s.history[boardId], { board, label }) },
-        // An outside change ends any local gesture on that board so steps never merge.
-        gesture: boardId === s.activeBoardId ? null : s.gesture,
+        // An outside change closes the current local step; the rest of the same drag or
+        // typing session forms one new step instead of one per frame.
+        gesture:
+          boardId === s.activeBoardId && s.gesture ? { base: next, pushed: false } : s.gesture,
         selectedIds:
           boardId === s.activeBoardId
             ? s.selectedIds.filter((id) => present.has(id))
@@ -345,9 +347,13 @@ export const useBoardStore = create<BoardState>()((set, get) => ({
       activeBoardId: first?.id ?? "",
       history: Object.fromEntries(Object.keys(workspace.boards).map((id) => [id, emptyHistory()])),
       // Keep counting up across loads so an AI holding an old revision is always rejected.
-      revisions: Object.fromEntries(
-        Object.keys(workspace.boards).map((id) => [id, (s.revisions[id] ?? 0) + 1]),
-      ),
+      // Boards of the previous workspace keep their count too, for when it is reopened.
+      revisions: {
+        ...s.revisions,
+        ...Object.fromEntries(
+          Object.keys(workspace.boards).map((id) => [id, (s.revisions[id] ?? 0) + 1]),
+        ),
+      },
       gesture: null,
       selectedIds: [],
       origin,

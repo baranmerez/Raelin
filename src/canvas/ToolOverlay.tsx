@@ -1,6 +1,6 @@
 import { useReactFlow, useViewport } from "@xyflow/react";
 import { getStroke } from "perfect-freehand";
-import { type PointerEvent, useRef, useState } from "react";
+import { type PointerEvent, useEffect, useRef, useState } from "react";
 import { strokesAt } from "../commands/geometry";
 import { makeFlowNode, makeNote, makeRegion } from "../model/factory";
 import { newId } from "../model/ids";
@@ -42,6 +42,15 @@ export function ToolOverlay() {
   const [points, setPoints] = useState<Point[] | null>(null);
   const [erasing, setErasing] = useState(false);
   const lastErase = useRef<{ x: number; y: number } | null>(null);
+
+  // Leaving the eraser mid-drag (Escape, shortcut) never gets a pointer-up: close the
+  // step here so later edits do not merge into it.
+  useEffect(() => {
+    if (tool !== "eraser" && erasing) {
+      endGesture();
+      setErasing(false);
+    }
+  }, [tool, erasing, endGesture]);
 
   if (tool === "select") return null;
 

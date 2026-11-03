@@ -48,12 +48,49 @@ const isStr = (v: unknown) => typeof v === "string";
 const tones = new Set(["lilac", "peach", "periwinkle", "sage", "butter", "paper"]);
 const shapes = new Set(["terminal", "process", "decision"]);
 
+const isOptStr = (v: unknown) => v === undefined || isStr(v);
+
+/**
+ * Shape of a Tiptap document node: what the note renderer walks. Deeply nested or
+ * malformed content is rejected instead of crashing the canvas on every start.
+ */
+function isDocNode(node: unknown, depth = 0): boolean {
+  if (depth > 40 || !node || typeof node !== "object" || Array.isArray(node)) return false;
+  const n = node as {
+    type?: unknown;
+    text?: unknown;
+    attrs?: unknown;
+    marks?: unknown;
+    content?: unknown;
+  };
+  if (!isStr(n.type) || !isOptStr(n.text)) return false;
+  if (
+    n.attrs !== undefined &&
+    (!n.attrs || typeof n.attrs !== "object" || Array.isArray(n.attrs))
+  ) {
+    return false;
+  }
+  if (
+    n.marks !== undefined &&
+    !(Array.isArray(n.marks) && n.marks.every((m) => !!m && typeof m === "object" && isStr(m.type)))
+  ) {
+    return false;
+  }
+  return (
+    n.content === undefined ||
+    (Array.isArray(n.content) && n.content.every((child) => isDocNode(child, depth + 1)))
+  );
+}
+
 /** Field-level checks so a hand-edited or badly merged file fails here, not during render. */
 function itemProblem(item: BoardItem): string | null {
   if (!item || typeof item !== "object" || !isStr(item.id)) return "kimlik eksik";
   if (item.kind === "edge") {
     if (!isStr(item.source) || !isStr(item.target)) return "bağlantı uçları eksik";
     if (item.style !== "flow" && item.style !== "reference") return "bağlantı türü geçersiz";
+    if (!isOptStr(item.label) || !isOptStr(item.sourceHandle) || !isOptStr(item.targetHandle)) {
+      return "bağlantı etiketi veya ucu geçersiz";
+    }
     return null;
   }
   if (!isNum(item.x) || !isNum(item.y) || !isNum(item.width) || item.width <= 0) {
@@ -66,7 +103,9 @@ function itemProblem(item: BoardItem): string | null {
       return isNum(item.height) && item.height > 0 ? null : "yükseklik geçersiz";
     case "note":
       if (!isStr(item.title) || !tones.has(item.tone)) return "not alanları geçersiz";
-      return item.content?.type === "doc" ? null : "not içeriği geçersiz";
+      return item.content?.type === "doc" && isDocNode(item.content)
+        ? null
+        : "not içeriği geçersiz";
     case "region":
       if (!isStr(item.title) || !tones.has(item.tone)) return "bölge alanları geçersiz";
       return isNum(item.height) && item.height > 0 ? null : "yükseklik geçersiz";

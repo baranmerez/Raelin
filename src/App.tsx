@@ -1,4 +1,5 @@
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ReactFlowProvider } from "@xyflow/react";
 import { useEffect, useState } from "react";
 import { openNow, saveNow } from "./app/actions";
@@ -86,6 +87,8 @@ async function initialWorkspace(): Promise<Startup> {
     if (leave) {
       try {
         const { workspace, origin } = await readWorkspaceFile(launchPath);
+        // The user chose to leave the recovered edits; they must not come back next start.
+        if (recovered) clearRecovery();
         return { workspace, origin, saved: true };
       } catch (error) {
         const fallback = recovered ?? { workspace: seedWorkspace(), origin: null, saved: true };
@@ -181,6 +184,36 @@ function useRecoveryAutosave(enabled: boolean) {
   }, [enabled]);
 }
 
+/**
+ * Closing with unsaved edits asks first. The recovery copy is written right away (the
+ * autosave waits 800 ms), but it holds no pictures, so the question says so.
+ */
+function useCloseGuard(enabled: boolean) {
+  useEffect(() => {
+    if (!enabled || !isDesktop) return;
+    let unlisten: (() => void) | undefined;
+    let disposed = false;
+    void getCurrentWindow()
+      .onCloseRequested(async (event) => {
+        const s = useBoardStore.getState();
+        if (s.workspace === s.savedWorkspace) return;
+        writeRecovery(s.workspace, s.origin);
+        const close = await confirmAction(
+          "Kaydedilmemiş değişiklikler var. Kaydetmeden kapatılsın mı? Panolar kurtarma kopyasında kalır, kaydedilmemiş resimler kaybolur.",
+        );
+        if (!close) event.preventDefault();
+      })
+      .then((fn) => {
+        if (disposed) fn();
+        else unlisten = fn;
+      });
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, [enabled]);
+}
+
 export default function App() {
   const [ready, setReady] = useState(false);
 
@@ -208,6 +241,7 @@ export default function App() {
 
   useShortcuts();
   useRecoveryAutosave(ready && stressCount === 0);
+  useCloseGuard(ready && stressCount === 0);
 
   if (!ready) return null;
 

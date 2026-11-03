@@ -173,3 +173,72 @@ describe("image items", () => {
     expect(boardToMarkdown(boardOf(image))).toContain("_Resim: Ekran taslağı_");
   });
 });
+
+describe("review regressions", () => {
+  const node = makeFlowNode("process", 0, 0);
+
+  it("rejects edge labels and note content that would crash rendering", () => {
+    const other = makeFlowNode("process", 0, 200);
+    const edge = makeEdge(node.id, other.id);
+    expect(() => validateItems([node, other, { ...edge, label: {} as unknown as string }])).toThrow(
+      FormatError,
+    );
+    const note = {
+      id: "note-1",
+      kind: "note" as const,
+      title: "Not",
+      tone: "butter" as const,
+      x: 0,
+      y: 0,
+      width: 280,
+      content: { type: "doc", content: [{ type: "paragraph" }] },
+    };
+    expect(() => validateItems([note])).not.toThrow();
+    const broken = { ...note, content: { type: "doc", content: "x" } };
+    expect(() => validateItems([broken as never])).toThrow(FormatError);
+    let deep: Record<string, unknown> = { type: "paragraph" };
+    for (let i = 0; i < 60; i++) deep = { type: "blockquote", content: [deep] };
+    expect(() => validateItems([{ ...note, content: { type: "doc", content: [deep] } }])).toThrow(
+      FormatError,
+    );
+  });
+
+  const workspaceOf = (...boards: BoardDoc[]): Workspace => ({
+    manifest: {
+      formatVersion,
+      title: "Deneme",
+      boards: boards.map((b) => ({ id: b.id, title: b.title })),
+    },
+    boards: Object.fromEntries(boards.map((b) => [b.id, b])),
+  });
+
+  it("keeps counting revisions when a workspace is opened again", () => {
+    const a = { ...emptyBoard("A"), items: [node] };
+    const b = emptyBoard("B");
+    const store = useBoardStore.getState();
+    store.loadWorkspace(workspaceOf(a), null, true);
+    const first = useBoardStore.getState().revisions[a.id];
+    useBoardStore.getState().loadWorkspace(workspaceOf(b), null, true);
+    useBoardStore.getState().loadWorkspace(workspaceOf(a), null, true);
+    expect(useBoardStore.getState().revisions[a.id]).toBeGreaterThan(first);
+  });
+
+  it("keeps a drag as one undo step when an AI change lands in the middle", () => {
+    const a = { ...emptyBoard("A"), items: [node] };
+    const s = () => useBoardStore.getState();
+    s().loadWorkspace(workspaceOf(a), null, true);
+    s().selectBoard(a.id);
+    const move = (x: number) => (b: BoardDoc) => ({
+      ...b,
+      items: b.items.map((i) => (i.id === node.id ? { ...i, x } : i)),
+    });
+    s().beginGesture();
+    s().live(move(10));
+    const board = s().workspace.boards[a.id];
+    s().commitTo(a.id, { ...board, title: "AI" }, "AI");
+    for (let x = 20; x < 120; x += 10) s().live(move(x));
+    s().endGesture();
+    // Drag before the AI change, the AI change, the rest of the drag.
+    expect(s().history[a.id].past).toHaveLength(3);
+  });
+});
