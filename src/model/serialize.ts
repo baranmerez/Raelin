@@ -33,10 +33,6 @@ export function serializeBoard(board: BoardDoc): string {
   return stableStringify({ ...board, items });
 }
 
-export function serializeManifest(manifest: WorkspaceManifest): string {
-  return stableStringify(manifest);
-}
-
 export class FormatError extends Error {}
 
 function parseJson(text: string, what: string): unknown {
@@ -92,7 +88,11 @@ function itemProblem(item: BoardItem): string | null {
 }
 
 export function parseBoard(text: string): BoardDoc {
-  const data = parseJson(text, "Pano dosyası") as BoardDoc;
+  return checkBoard(parseJson(text, "Pano dosyası"));
+}
+
+function checkBoard(value: unknown): BoardDoc {
+  const data = value as BoardDoc;
   if (data?.formatVersion !== formatVersion) {
     throw new FormatError(`Desteklenmeyen pano biçimi: ${String(data?.formatVersion)}`);
   }
@@ -125,29 +125,76 @@ export function validateItems(items: readonly BoardItem[]): void {
   }
 }
 
-export function parseManifest(text: string): WorkspaceManifest {
-  const data = parseJson(text, "raelin.json") as WorkspaceManifest;
-  if (data?.formatVersion !== formatVersion || !Array.isArray(data.boards)) {
-    throw new FormatError("raelin.json eksik veya desteklenmeyen sürümde.");
-  }
-  for (const board of data.boards) {
-    if (!isSafeId(board.id)) throw new FormatError(`Geçersiz pano kimliği: ${board.id}`);
-  }
-  return data;
+/** Name → base64 bytes of every picture the boards use. */
+export type AssetData = Record<string, string>;
+
+export interface WorkspaceFileData {
+  workspace: Workspace;
+  assets: AssetData;
 }
 
-export function parseWorkspace(
-  manifestText: string,
-  boardTexts: Record<string, string>,
-): Workspace {
-  const manifest = parseManifest(manifestText);
-  const boards: Record<string, BoardDoc> = {};
-  for (const { id } of manifest.boards) {
-    const text = boardTexts[id];
-    if (text === undefined) throw new FormatError(`Pano dosyası bulunamadı: boards/${id}.json`);
-    const board = parseBoard(text);
-    if (board.id !== id) throw new FormatError(`Pano kimliği dosya adıyla uyuşmuyor: ${id}`);
-    boards[id] = board;
+/** Marks a Raelin workspace file, so an unrelated JSON file is not opened by mistake. */
+const fileKind = "raelin-workspace";
+const base64 = /^[A-Za-z0-9+/]*={0,2}$/;
+/** 10 MB of picture is a little over 13.3 MB of base64. */
+const maxAssetChars = Math.ceil((10 * 1024 * 1024 * 4) / 3) + 4;
+
+/**
+ * The whole workspace as one `.raelin` file: boards in tab order, each with its items
+ * sorted by id, and pictures as base64. Keys are sorted, so saving the same workspace
+ * twice gives the same text.
+ */
+export function serializeWorkspaceFile(workspace: Workspace, assets: AssetData): string {
+  const boards = workspace.manifest.boards.map(({ id }) => {
+    const board = workspace.boards[id];
+    return { ...board, items: [...board.items].sort((a, b) => (a.id < b.id ? -1 : 1)) };
+  });
+  return stableStringify({
+    kind: fileKind,
+    formatVersion,
+    title: workspace.manifest.title,
+    boards,
+    assets,
+  });
+}
+
+export function parseWorkspaceFile(text: string): WorkspaceFileData {
+  const data = parseJson(text, "Çalışma alanı dosyası") as {
+    kind?: unknown;
+    formatVersion?: unknown;
+    title?: unknown;
+    boards?: unknown;
+    assets?: unknown;
+  };
+  if (data?.kind !== fileKind) throw new FormatError("Bu bir Raelin çalışma alanı dosyası değil.");
+  if (data.formatVersion !== formatVersion) {
+    throw new FormatError(`Desteklenmeyen dosya sürümü: ${String(data.formatVersion)}`);
   }
-  return { manifest, boards };
+  if (!isStr(data.title) || !Array.isArray(data.boards) || data.boards.length === 0) {
+    throw new FormatError("Çalışma alanı dosyası eksik veya bozuk.");
+  }
+  const boards: Record<string, BoardDoc> = {};
+  for (const raw of data.boards) {
+    const board = checkBoard(raw);
+    if (boards[board.id]) throw new FormatError(`Tekrarlanan pano kimliği: ${board.id}`);
+    boards[board.id] = board;
+  }
+  const assets: AssetData = {};
+  const rawAssets = (data.assets ?? {}) as Record<string, unknown>;
+  if (typeof rawAssets !== "object" || Array.isArray(rawAssets)) {
+    throw new FormatError("Resim listesi bozuk.");
+  }
+  for (const [name, value] of Object.entries(rawAssets)) {
+    if (!isAssetName(name)) throw new FormatError(`Geçersiz resim adı: ${name}`);
+    if (!isStr(value) || value.length > maxAssetChars || !base64.test(value)) {
+      throw new FormatError(`Resim verisi bozuk: ${name}`);
+    }
+    assets[name] = value;
+  }
+  const manifest: WorkspaceManifest = {
+    formatVersion,
+    title: data.title,
+    boards: (data.boards as BoardDoc[]).map((b) => ({ id: b.id, title: b.title })),
+  };
+  return { workspace: { manifest, boards }, assets };
 }

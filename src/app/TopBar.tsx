@@ -20,7 +20,7 @@ export function TopBar() {
   const boardTitle = useBoardStore((s) => s.workspace.boards[s.activeBoardId]?.title);
   const background = useBoardStore((s) => s.workspace.boards[s.activeBoardId]?.background);
   const title = useBoardStore((s) => s.workspace.manifest.title);
-  const workspaceDir = useBoardStore((s) => s.origin?.dir ?? null);
+  const workspacePath = useBoardStore((s) => s.origin?.path ?? null);
   const dirty = useBoardStore((s) => s.workspace !== s.savedWorkspace);
   const canUndo = useBoardStore((s) => (s.history[s.activeBoardId]?.past.length ?? 0) > 0);
   const canRedo = useBoardStore((s) => (s.history[s.activeBoardId]?.future.length ?? 0) > 0);
@@ -31,6 +31,8 @@ export function TopBar() {
   const [exportOpen, setExportOpen] = useState(false);
   const themeRef = useDismiss(themeOpen, () => setThemeOpen(false));
   const exportRef = useDismiss(exportOpen, () => setExportOpen(false));
+  const [saveOpen, setSaveOpen] = useState(false);
+  const saveRef = useDismiss(saveOpen, () => setSaveOpen(false));
   const { getNodes } = useReactFlow();
   const exportImage = (kind: ImageKind) => {
     setExportOpen(false);
@@ -46,7 +48,7 @@ export function TopBar() {
       <span className="top-divider" />
       <h1 className="workspace-title">{title}</h1>
       <Icon name="chevron" size={16} />
-      <span className="board-crumb" title={workspaceDir ?? "Henüz kaydedilmedi"}>
+      <span className="board-crumb" title={workspacePath ?? "Henüz kaydedilmedi"}>
         {boardTitle}
       </span>
       {dirty && (
@@ -123,10 +125,45 @@ export function TopBar() {
         <Icon name="folder" />
         Aç
       </button>
-      <button type="button" className="ghost-button" onClick={saveNow} title="Kaydet (Ctrl+S)">
-        <Icon name="save" />
-        Kaydet
-      </button>
+      <div className="menu-anchor split-button" ref={saveRef}>
+        <button
+          type="button"
+          className="ghost-button"
+          onClick={() => void saveNow()}
+          title="Kaydet (Ctrl+S)"
+        >
+          <Icon name="save" />
+          Kaydet
+        </button>
+        <button
+          type="button"
+          className="ghost-button split-toggle"
+          onClick={() => setSaveOpen((o) => !o)}
+          aria-expanded={saveOpen}
+          aria-label="Kaydetme seçenekleri"
+          title="Kaydetme seçenekleri"
+        >
+          <Icon name="chevron" size={16} />
+        </button>
+        <AnimatePresence>
+          {saveOpen && (
+            <motion.div className="popover-menu down align-right" {...menuMotion}>
+              <button
+                type="button"
+                className="menu-item"
+                onClick={() => {
+                  setSaveOpen(false);
+                  void saveNow({ saveAs: true });
+                }}
+              >
+                <Icon name="save" size={18} />
+                Farklı kaydet…
+                <kbd className="menu-kbd">Ctrl+Shift+S</kbd>
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
 
       <div className="menu-anchor" ref={exportRef}>
         <button

@@ -5,9 +5,9 @@ import { seedWorkspace } from "./seed";
 import {
   FormatError,
   parseBoard,
-  parseWorkspace,
+  parseWorkspaceFile,
   serializeBoard,
-  serializeManifest,
+  serializeWorkspaceFile,
 } from "./serialize";
 
 describe("serialize", () => {
@@ -21,17 +21,30 @@ describe("serialize", () => {
     expect(serializeBoard(board).endsWith("\n")).toBe(true);
   });
 
-  it("round-trips the seed workspace", () => {
+  it("round-trips the seed workspace as one file", () => {
     const workspace = seedWorkspace();
-    const boards = Object.fromEntries(
-      Object.values(workspace.boards).map((board) => [board.id, serializeBoard(board)]),
+    const assets = { "img-abc.png": "iVBORw0KGgo=" };
+    const text = serializeWorkspaceFile(workspace, assets);
+    const parsed = parseWorkspaceFile(text);
+    expect(parsed.workspace.manifest).toEqual(workspace.manifest);
+    expect(parsed.assets).toEqual(assets);
+    // Same workspace, same text: items are sorted by id and keys are sorted.
+    expect(serializeWorkspaceFile(parsed.workspace, parsed.assets)).toBe(text);
+  });
+
+  it("refuses files that are not Raelin workspaces or carry bad pictures", () => {
+    const text = serializeWorkspaceFile(seedWorkspace(), {});
+    expect(() => parseWorkspaceFile('{"boards":[]}')).toThrow(FormatError);
+    expect(() => parseWorkspaceFile("{ not json")).toThrow(FormatError);
+    const withAssets = (assets: Record<string, string>) =>
+      JSON.stringify({ ...JSON.parse(text), assets });
+    expect(() => parseWorkspaceFile(withAssets({ "../x.png": "AAAA" }))).toThrow(FormatError);
+    expect(() => parseWorkspaceFile(withAssets({ "img-a.png": "not base64!" }))).toThrow(
+      FormatError,
     );
-    const parsed = parseWorkspace(serializeManifest(workspace.manifest), boards);
-    // Items are stored sorted by id, so compare the canonical text, not array order.
-    expect(parsed.manifest).toEqual(workspace.manifest);
-    for (const [id, text] of Object.entries(boards)) {
-      expect(serializeBoard(parsed.boards[id])).toBe(text);
-    }
+    const duplicate = JSON.parse(text);
+    duplicate.boards.push(duplicate.boards[0]);
+    expect(() => parseWorkspaceFile(JSON.stringify(duplicate))).toThrow(FormatError);
   });
 
   it("rejects an edge that points at a missing item", () => {

@@ -170,6 +170,6 @@ describe("image items", () => {
   });
 
   it("show up in the Markdown export", () => {
-    expect(boardToMarkdown(boardOf(image))).toContain("![Ekran taslağı](assets/img-abc.png)");
+    expect(boardToMarkdown(boardOf(image))).toContain("_Resim: Ekran taslağı_");
   });
 });

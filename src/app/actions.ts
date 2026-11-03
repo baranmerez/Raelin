@@ -21,19 +21,19 @@ export function isDirty(): boolean {
   return workspace !== savedWorkspace;
 }
 
-export async function saveNow(): Promise<void> {
+export async function saveNow(options: { saveAs?: boolean } = {}): Promise<void> {
   const { workspace, origin, markSaved, showToast } = useBoardStore.getState();
   if (!isDesktop) {
-    showToast("Tarayıcıda yalnız kurtarma kopyası tutuluyor; klasöre kaydetme masaüstünde.");
+    showToast("Tarayıcıda yalnız kurtarma kopyası tutuluyor; dosyaya kaydetme masaüstünde.");
     return;
   }
   try {
-    const saved = await saveWorkspace(workspace, origin);
+    const saved = await saveWorkspace(workspace, origin, options);
     if (!saved) return;
     markSaved(saved.origin, workspace);
     if (!isDirty()) clearRecovery();
     if (saved.missingAssets.length > 0) {
-      showToast(`Kaydedildi, ancak ${saved.missingAssets.length} resim bulunamadı.`, "error");
+      showToast(`Kaydedildi, ancak ${saved.missingAssets.length} resim dosyada yok.`, "error");
     } else {
       showToast("Çalışma alanı kaydedildi.");
     }

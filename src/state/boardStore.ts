@@ -55,7 +55,7 @@ interface BoardState {
   tool: Tool;
   penColor: string;
   penSize: number;
-  /** Folder and on-disk fingerprint of the open workspace; null until first save/open. */
+  /** File and on-disk stamp of the open workspace; null until first save/open. */
   origin: WorkspaceOrigin | null;
   /** Workspace object as last saved or opened; anything else means unsaved edits. */
   savedWorkspace: Workspace | null;

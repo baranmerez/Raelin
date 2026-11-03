@@ -23,19 +23,17 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            workspace::pick_workspace_dir,
+            workspace::pick_workspace_open,
+            workspace::pick_workspace_save,
+            workspace::last_workspace_file,
+            workspace::is_workspace_allowed,
+            workspace::probe_workspace_file,
+            workspace::read_workspace_file,
+            workspace::write_workspace_file,
             workspace::pick_markdown_file,
-            workspace::last_workspace_dir,
-            workspace::is_dir_allowed,
-            workspace::read_workspace,
-            workspace::probe_workspace,
-            workspace::write_workspace,
             workspace::write_markdown,
             workspace::pick_image_file,
             workspace::write_image_file,
-            workspace::read_asset,
-            workspace::write_asset,
-            workspace::copy_assets,
             mcp::mcp_ready,
             mcp::mcp_send
         ])

@@ -9,14 +9,14 @@ import { TopBar } from "./app/TopBar";
 import { Canvas } from "./canvas/Canvas";
 import { startMcpHost } from "./mcp/connection";
 import { seedWorkspace, stressBoard } from "./model/seed";
-import { parseWorkspace, serializeBoard, serializeManifest } from "./model/serialize";
+import { parseWorkspaceFile, serializeWorkspaceFile } from "./model/serialize";
 import type { Workspace } from "./model/types";
 import { formatVersion } from "./model/types";
 import {
   clearRecovery,
-  readLastDir,
+  readLastPath,
   readRecovery,
-  readWorkspaceAt,
+  readWorkspaceFile,
   type WorkspaceOrigin,
   writeRecovery,
 } from "./platform/storage";
@@ -36,12 +36,10 @@ function validRecovery(): Startup | null {
   const recovery = readRecovery();
   if (!recovery) return null;
   try {
-    const boards = Object.fromEntries(
-      Object.values(recovery.workspace.boards).map((b) => [b.id, serializeBoard(b)]),
-    );
+    const { workspace } = parseWorkspaceFile(serializeWorkspaceFile(recovery.workspace, {}));
     return {
-      workspace: parseWorkspace(serializeManifest(recovery.workspace.manifest), boards),
-      // The stored fingerprint lets the next save notice if the folder changed meanwhile.
+      workspace,
+      // The stored stamp lets the next save notice if the file changed meanwhile.
       origin: recovery.origin,
       saved: false,
       notice: "Kaydedilmemiş değişiklikler kurtarıldı. Kaydetmeyi unutma.",
@@ -53,7 +51,7 @@ function validRecovery(): Startup | null {
 
 /**
  * Startup order: unsaved edits from a crash first (kept dirty, never written silently),
- * then the last folder from disk, then the example workspace.
+ * then the last workspace file, then the example workspace.
  */
 async function initialWorkspace(): Promise<Startup> {
   if (stressCount > 0) {
@@ -72,14 +70,20 @@ async function initialWorkspace(): Promise<Startup> {
     };
   }
   const recovered = validRecovery();
-  if (recovered) return recovered;
-  const lastDir = await readLastDir();
-  if (lastDir) {
+  const lastPath = await readLastPath();
+  if (recovered) {
+    // The recovery copy holds no pictures; take the saved ones from the file it came from.
+    if (recovered.origin && recovered.origin.path === lastPath) {
+      await readWorkspaceFile(lastPath).catch(() => undefined);
+    }
+    return recovered;
+  }
+  if (lastPath) {
     try {
-      const { workspace, origin } = await readWorkspaceAt(lastDir);
+      const { workspace, origin } = await readWorkspaceFile(lastPath);
       return { workspace, origin, saved: true };
     } catch {
-      // Folder moved or broken: fall back to the example instead of failing to start.
+      // File moved or broken: fall back to the example instead of failing to start.
     }
   }
   return { workspace: seedWorkspace(), origin: null, saved: true };
@@ -97,7 +101,7 @@ function useShortcuts() {
       const mod = e.ctrlKey || e.metaKey;
       if (mod && e.key.toLowerCase() === "s") {
         e.preventDefault();
-        void saveNow();
+        void saveNow({ saveAs: e.shiftKey });
         return;
       }
       if (mod && e.key.toLowerCase() === "o") {

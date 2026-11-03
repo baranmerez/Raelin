@@ -1,5 +1,5 @@
 import { type Node, type NodeProps, NodeResizer } from "@xyflow/react";
-import { memo, useEffect, useState } from "react";
+import { memo } from "react";
 import type { ImageItem } from "../../model/types";
 import { assetUrl } from "../../platform/assets";
 import { useBoardStore } from "../../state/boardStore";
@@ -9,21 +9,10 @@ export type ImageRfNode = Node<{ item: ImageItem }, "image">;
 
 export const ImageView = memo(function ImageView({ data, selected }: NodeProps<ImageRfNode>) {
   const { item } = data;
-  const dir = useBoardStore((s) => s.origin?.dir ?? null);
   const beginGesture = useBoardStore((s) => s.beginGesture);
   const endGesture = useBoardStore((s) => s.endGesture);
-  // undefined while loading, null when the file cannot be found.
-  const [url, setUrl] = useState<string | null | undefined>(undefined);
-
-  useEffect(() => {
-    let current = true;
-    void assetUrl(item.src, dir).then((next) => {
-      if (current) setUrl(next);
-    });
-    return () => {
-      current = false;
-    };
-  }, [item.src, dir]);
+  // Pictures arrive with the workspace file, so there is nothing to wait for.
+  const url = assetUrl(item.src);
 
   return (
     <div className={`image-node${selected ? " is-selected" : ""}`}>
@@ -41,7 +30,7 @@ export const ImageView = memo(function ImageView({ data, selected }: NodeProps<I
         <img src={url} alt={item.alt} draggable={false} />
       ) : (
         <div className="image-missing" role="img" aria-label={item.alt || "Resim"}>
-          {url === null ? "Resim bulunamadı" : ""}
+          Resim bulunamadı
         </div>
       )}
       <SideHandles />

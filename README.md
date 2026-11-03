@@ -20,6 +20,13 @@ npm run tauri dev
 
 The UI also runs in a plain browser with `npm run dev` (file save/open needs the desktop shell).
 
+## Workspace file
+
+A workspace is one `.raelin` file: JSON with sorted keys, the boards in tab order (items
+sorted by id) and pasted pictures as base64 under `assets`. Saving the same workspace twice
+writes the same text. Unsaved edits are mirrored to a local recovery copy (without
+pictures) until the next save.
+
 ## Connect an AI client (MCP)
 
 AI changes appear live and undo with Ctrl+Z. The bridge may start before Raelin does and

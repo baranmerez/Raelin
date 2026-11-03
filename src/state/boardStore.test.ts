@@ -74,7 +74,7 @@ describe("board history", () => {
     s.commit(moveTo(nodeId, 99));
     const after = useBoardStore.getState();
     expect(after.workspace).not.toBe(after.savedWorkspace);
-    after.markSaved({ dir: "C:\\example", fingerprint: "x" }, after.workspace);
+    after.markSaved({ path: "C:\\example\\example.raelin", stamp: "1:1" }, after.workspace);
     const saved = useBoardStore.getState();
     expect(saved.workspace).toBe(saved.savedWorkspace);
   });

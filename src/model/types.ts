@@ -50,8 +50,8 @@ export interface StrokeItem extends PlacedItem {
 }
 
 /**
- * Pasted or dropped picture. The bytes live next to the boards as `assets/<src>`;
- * the board only names the file, so boards stay small, text-only and diffable.
+ * Pasted or dropped picture. The board only names it; the bytes are stored once per
+ * workspace file under `assets[<src>]`, so the same picture is never duplicated.
  */
 export interface ImageItem extends PlacedItem {
   kind: "image";

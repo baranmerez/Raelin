@@ -152,8 +152,8 @@ function groupSection(
   }
   for (const image of members) {
     if (image.kind !== "image") continue;
-    // Relative to the workspace folder, where the picture is stored.
-    lines.push(`![${image.alt || "resim"}](assets/${image.src})`, "");
+    // The picture itself lives inside the .raelin file; Markdown only names it.
+    lines.push(`_Resim: ${image.alt || "adsız"}_`, "");
   }
   return lines;
 }
