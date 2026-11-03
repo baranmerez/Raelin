@@ -4,6 +4,7 @@ import { toPng, toSvg } from "html-to-image";
 import { selectionItems } from "../canvas/useClipboard";
 import { isDesktop } from "../platform/storage";
 import { useBoardStore } from "../state/boardStore";
+import { nextFrame } from "../ui/frames";
 
 export type ImageKind = "png" | "svg";
 
@@ -17,16 +18,14 @@ const chrome = [
   "react-flow__resize-control",
   "react-flow__panel",
   "is-empty",
+  // Card controls: add, remove and copy buttons belong to editing, not to the picture.
+  "card-add",
+  "row-remove",
+  "card-icon-button",
 ];
 
 function fileName(title: string, kind: ImageKind): string {
   return `${title.replace(/[\\/:*?"<>|]+/g, "-").trim() || "raelin"}.${kind}`;
-}
-
-function nextFrame(): Promise<void> {
-  return new Promise((resolve) =>
-    requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
-  );
 }
 
 function dataUrlBytes(url: string): Uint8Array {
@@ -82,6 +81,8 @@ export async function renderBoardImage(
   const selected = useBoardStore.getState().selectedIds;
   if (selected.length > 0) {
     useBoardStore.getState().setSelection([]);
+    // Two paints so the selection outline is gone before the picture is taken.
+    await nextFrame();
     await nextFrame();
   }
   try {

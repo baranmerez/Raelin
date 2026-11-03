@@ -1,5 +1,6 @@
 import { type Node, useReactFlow } from "@xyflow/react";
 import { useEffect } from "react";
+import { isVisible, nextFrame, within } from "../ui/frames";
 
 /**
  * The canvas owns the React Flow instance; code outside React (MCP tools) reaches the
@@ -18,10 +19,6 @@ export function viewController(): ViewController | null {
   return current;
 }
 
-function nextFrame(): Promise<void> {
-  return new Promise((resolve) => requestAnimationFrame(() => resolve()));
-}
-
 /** Registers the surrounding React Flow instance while the calling component is mounted. */
 export function useViewController() {
   const { fitView, getNodes } = useReactFlow();
@@ -38,12 +35,15 @@ export function useViewController() {
         for (let frame = 0; frame < 30 && !ready(); frame++) await nextFrame();
         await nextFrame();
         await nextFrame();
-        return fitView({
+        if (getNodes().length === 0) return false;
+        // The fit animation runs on animation frames too; a hidden window skips it.
+        const fitted = fitView({
           nodes: ids.length > 0 ? ids.map((id) => ({ id })) : undefined,
           padding: 0.15,
           maxZoom: 1.2,
-          duration: 300,
+          duration: isVisible() ? 300 : 0,
         });
+        return within(fitted, 1000, true);
       },
       getNodes,
     };
