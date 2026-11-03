@@ -22,7 +22,9 @@ The UI also runs in a plain browser with `npm run dev` (file save/open needs the
 
 ## Connect an AI client (MCP)
 
-Raelin must be running; AI changes appear live and undo with Ctrl+Z. Build the bridge once:
+AI changes appear live and undo with Ctrl+Z. The bridge may start before Raelin does and
+survives app restarts: it reconnects on its own and tells the client the tool list changed.
+Build the bridge once:
 
 ```bash
 cargo build -p raelin-mcp
