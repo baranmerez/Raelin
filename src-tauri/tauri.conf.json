@@ -45,6 +45,11 @@
         "role": "Editor",
         "mimeType": "application/x-raelin"
       }
-    ]
+    ],
+    "windows": {
+      "nsis": {
+        "installerHooks": "./windows/hooks.nsh"
+      }
+    }
   }
 }
