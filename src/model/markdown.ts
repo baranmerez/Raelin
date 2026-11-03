@@ -152,7 +152,7 @@ function groupSection(
   }
   for (const image of members) {
     if (image.kind !== "image") continue;
-    // The picture itself lives inside the .raelin file; Markdown only names it.
+    // The picture itself lives inside the .rli file; Markdown only names it.
     lines.push(`_Resim: ${image.alt || "adsız"}_`, "");
   }
   return lines;

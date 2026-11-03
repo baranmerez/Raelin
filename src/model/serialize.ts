@@ -140,7 +140,7 @@ const base64 = /^[A-Za-z0-9+/]*={0,2}$/;
 const maxAssetChars = Math.ceil((10 * 1024 * 1024 * 4) / 3) + 4;
 
 /**
- * The whole workspace as one `.raelin` file: boards in tab order, each with its items
+ * The whole workspace as one `.rli` file: boards in tab order, each with its items
  * sorted by id, and pictures as base64. Keys are sorted, so saving the same workspace
  * twice gives the same text.
  */

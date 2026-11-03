@@ -1,4 +1,4 @@
-//! Workspace file I/O. A workspace is one `.raelin` file (JSON with boards and base64
+//! Workspace file I/O. A workspace is one `.rli` file (JSON with boards and base64
 //! pictures); the page parses and validates it, Rust only moves the bytes.
 //!
 //! The WebView never hands us a path we trust: workspace files and exports are picked
@@ -13,7 +13,7 @@ use std::time::UNIX_EPOCH;
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_dialog::DialogExt;
 
-const EXTENSION: &str = "raelin";
+const EXTENSION: &str = "rli";
 const LAST_FILE: &str = "last-workspace.txt";
 /// Boards are small; this is room for many pictures of up to 10 MB each.
 const MAX_WORKSPACE_BYTES: u64 = 256 * 1024 * 1024;
@@ -70,7 +70,7 @@ impl LaunchFile {
 /// Event that tells the page to open a workspace file passed to a second launch.
 pub const OPEN_EVENT: &str = "workspace:open";
 
-/// The first existing `.raelin` file among command-line arguments (program path excluded).
+/// The first existing `.rli` file among command-line arguments (program path excluded).
 /// Relative paths are taken from `cwd`, the folder the launch came from.
 pub fn workspace_arg(args: &[String], cwd: &Path) -> Option<PathBuf> {
     args.iter().skip(1).find_map(|arg| {
@@ -380,13 +380,13 @@ mod tests {
     #[test]
     fn only_approved_raelin_files_pass() {
         let allowed = Allowed::default();
-        let file = std::env::temp_dir().join("raelin-test.raelin");
+        let file = std::env::temp_dir().join("raelin-test.rli");
         let text = file.to_string_lossy().into_owned();
         assert!(allowed.check_workspace(&text).is_err());
         allowed.allow_workspace(&file).unwrap();
         assert!(allowed.check_workspace(&text).is_ok());
         // Approval is per file, and only for workspace files with a full path.
-        let sibling = std::env::temp_dir().join("other.raelin");
+        let sibling = std::env::temp_dir().join("other.rli");
         assert!(allowed.check_workspace(&sibling.to_string_lossy()).is_err());
         assert!(
             allowed
@@ -395,7 +395,7 @@ mod tests {
         );
         assert!(
             allowed
-                .allow_workspace(Path::new("relative.raelin"))
+                .allow_workspace(Path::new("relative.rli"))
                 .is_err()
         );
     }
@@ -403,7 +403,7 @@ mod tests {
     #[test]
     fn launch_argument_must_be_an_existing_raelin_file() {
         let dir = std::env::temp_dir();
-        let file = dir.join("raelin-launch-test.raelin");
+        let file = dir.join("raelin-launch-test.rli");
         fs::write(&file, "{}").unwrap();
         let args = |rest: &[&str]| {
             std::iter::once("raelin.exe")
@@ -412,10 +412,10 @@ mod tests {
                 .collect::<Vec<_>>()
         };
         assert_eq!(
-            workspace_arg(&args(&["--flag", "raelin-launch-test.raelin"]), &dir),
-            Some(dir.join("raelin-launch-test.raelin"))
+            workspace_arg(&args(&["--flag", "raelin-launch-test.rli"]), &dir),
+            Some(dir.join("raelin-launch-test.rli"))
         );
-        assert_eq!(workspace_arg(&args(&["missing.raelin"]), &dir), None);
+        assert_eq!(workspace_arg(&args(&["missing.rli"]), &dir), None);
         assert_eq!(workspace_arg(&args(&["notes.txt"]), &dir), None);
         // The program path itself never counts.
         assert_eq!(
@@ -427,7 +427,7 @@ mod tests {
 
     #[test]
     fn stamp_changes_when_the_file_changes() {
-        let path = std::env::temp_dir().join("raelin-stamp-test.raelin");
+        let path = std::env::temp_dir().join("raelin-stamp-test.rli");
         write_atomic(&path, "a").unwrap();
         let first = stamp(&path).unwrap();
         write_atomic(&path, "longer").unwrap();

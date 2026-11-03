@@ -39,7 +39,7 @@
     "externalBin": ["binaries/raelin-mcp"],
     "fileAssociations": [
       {
-        "ext": ["raelin"],
+        "ext": ["rli"],
         "name": "Raelin",
         "description": "Raelin çalışma alanı",
         "role": "Editor",

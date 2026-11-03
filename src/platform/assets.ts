@@ -3,7 +3,7 @@ import type { AssetData } from "../model/serialize";
 import type { Workspace } from "../model/types";
 
 /**
- * Picture bytes for image items, kept in memory for the open workspace. The `.raelin`
+ * Picture bytes for image items, kept in memory for the open workspace. The `.rli`
  * file carries them as base64: loaded on open, written back on every save.
  */
 

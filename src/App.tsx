@@ -192,7 +192,7 @@ export default function App() {
       store.loadWorkspace(workspace, origin, saved);
       if (notice) store.showToast(notice);
       setReady(true);
-      // A .raelin file double-clicked while Raelin runs arrives from the second launch.
+      // A .rli file double-clicked while Raelin runs arrives from the second launch.
       if (isDesktop) {
         void listen<string>("workspace:open", (e) => void openNow(e.payload));
       }

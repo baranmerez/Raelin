@@ -29,11 +29,11 @@ export async function confirmAction(message: string): Promise<boolean> {
 }
 
 function suggestedName(workspace: Workspace): string {
-  return `${workspace.manifest.title.replace(/[\\/:*?"<>|]+/g, "-").trim() || "Raelin"}.raelin`;
+  return `${workspace.manifest.title.replace(/[\\/:*?"<>|]+/g, "-").trim() || "Raelin"}.rli`;
 }
 
 /**
- * Writes the workspace as one `.raelin` file; asks where when there is no file yet or for
+ * Writes the workspace as one `.rli` file; asks where when there is no file yet or for
  * "save as". A file that changed outside the app since `origin` was recorded needs an
  * explicit overwrite. Returns null if the user cancelled.
  */
@@ -153,7 +153,7 @@ export function clearRecovery(): void {
   }
 }
 
-/** The `.raelin` file Raelin was started with (double-click), once; null otherwise. */
+/** The `.rli` file Raelin was started with (double-click), once; null otherwise. */
 export async function readLaunchPath(): Promise<string | null> {
   if (!isDesktop) return null;
   try {
