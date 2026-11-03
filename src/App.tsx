@@ -114,7 +114,9 @@ function useShortcuts() {
         e.preventDefault();
         s.redo();
       } else if (e.key === "Escape") {
-        s.setTool("select");
+        // First Escape leaves a tool, the next one clears the selection.
+        if (s.tool === "select") s.setSelection([]);
+        else s.setTool("select");
       } else if (!mod && !e.altKey) {
         const entry = toolList.find((t) => t.key === e.key.toUpperCase());
         if (entry) s.setTool(entry.tool);
