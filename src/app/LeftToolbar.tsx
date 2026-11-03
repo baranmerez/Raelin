@@ -5,6 +5,7 @@ import { Icon, type IconName } from "../ui/Icon";
 export const toolList: { tool: Tool; icon: IconName; label: string; key: string }[] = [
   { tool: "select", icon: "pointer", label: "Seç", key: "V" },
   { tool: "pen", icon: "pen", label: "Kalem", key: "P" },
+  { tool: "eraser", icon: "eraser", label: "Silgi (yalnız kalem çizgileri)", key: "E" },
   { tool: "process", icon: "process", label: "Adım", key: "R" },
   { tool: "decision", icon: "decision", label: "Karar", key: "D" },
   { tool: "terminal", icon: "terminal", label: "Başlangıç / bitiş", key: "O" },

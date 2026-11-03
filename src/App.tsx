@@ -182,13 +182,14 @@ export default function App() {
     <div className="app">
       <TopBar />
       <BoardTabs />
-      <div className="workbench">
-        <LeftToolbar />
-        <ReactFlowProvider>
+      {/* The panel reads measured node sizes, so the provider spans the whole workbench. */}
+      <ReactFlowProvider>
+        <div className="workbench">
+          <LeftToolbar />
           <Canvas stress={stressCount > 0} />
-        </ReactFlowProvider>
-        <RightPanel />
-      </div>
+          <RightPanel />
+        </div>
+      </ReactFlowProvider>
       <Toast />
     </div>
   );

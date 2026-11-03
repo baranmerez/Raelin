@@ -75,3 +75,52 @@ export function boundsOf(rects: Rect[]): Rect | null {
   const maxY = Math.max(...rects.map((r) => r.y + r.height));
   return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
 }
+
+/** Ids of the nodes inside any of the given regions (nested regions included). */
+export function contentsOf(board: BoardDoc, regionIds: ReadonlySet<string>): Set<string> {
+  const regions = board.items.filter(
+    (i): i is RegionItem => i.kind === "region" && regionIds.has(i.id),
+  );
+  const inside = new Set<string>();
+  if (regions.length === 0) return inside;
+  for (const item of board.items) {
+    if (!isNodeItem(item) || regionIds.has(item.id)) continue;
+    if (regions.some((r) => contains(r, item))) inside.add(item.id);
+  }
+  return inside;
+}
+
+function segmentDistance(px: number, py: number, ax: number, ay: number, bx: number, by: number) {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const len = dx * dx + dy * dy;
+  const t = len === 0 ? 0 : Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / len));
+  return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
+}
+
+/** Pen strokes passing within `radius` of a point (flow coordinates). */
+export function strokesAt(board: BoardDoc, x: number, y: number, radius: number): Set<string> {
+  const hits = new Set<string>();
+  for (const item of board.items) {
+    if (item.kind !== "stroke") continue;
+    const reach = radius + item.size / 2;
+    if (
+      x < item.x - reach ||
+      x > item.x + item.width + reach ||
+      y < item.y - reach ||
+      y > item.y + item.height + reach
+    ) {
+      continue;
+    }
+    const pts = item.points;
+    for (let i = 0; i < pts.length; i++) {
+      const [ax, ay] = pts[i];
+      const [bx, by] = pts[Math.min(i + 1, pts.length - 1)];
+      if (segmentDistance(x - item.x, y - item.y, ax, ay, bx, by) <= reach) {
+        hits.add(item.id);
+        break;
+      }
+    }
+  }
+  return hits;
+}

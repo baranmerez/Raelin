@@ -1,10 +1,19 @@
 import { create } from "zustand";
+import { cloneItems } from "../model/clone";
 import { emptyBoard } from "../model/factory";
 import { FormatError, validateItems } from "../model/serialize";
 import type { BoardDoc, BoardItem, Workspace } from "../model/types";
 import type { WorkspaceOrigin } from "../platform/storage";
 
-export type Tool = "select" | "pen" | "process" | "decision" | "terminal" | "note" | "region";
+export type Tool =
+  | "select"
+  | "pen"
+  | "eraser"
+  | "process"
+  | "decision"
+  | "terminal"
+  | "note"
+  | "region";
 
 /** One undo step: the board before the change and, for AI changes, who made it. */
 interface Step {
@@ -25,6 +34,12 @@ export interface Toast {
 }
 
 const historyLimit = 200;
+
+export interface RemovedBoard {
+  board: BoardDoc;
+  index: number;
+  history: History | undefined;
+}
 
 interface BoardState {
   workspace: Workspace;
@@ -53,6 +68,13 @@ interface BoardState {
   addBoard: (title: string) => void;
   /** New board without switching to it (AI clients). Returns its id. */
   createBoard: (title: string) => string;
+  /** Undoable on that board; the manifest title follows the board title when saving. */
+  renameBoard: (id: string, title: string) => void;
+  /** Copy with fresh ids, placed right after the original and opened. */
+  duplicateBoard: (id: string) => void;
+  /** Removes a board (never the last one) and returns what restoreBoard needs. */
+  deleteBoard: (id: string) => RemovedBoard | null;
+  restoreBoard: (removed: RemovedBoard) => void;
   /** One undoable step on the active board. Return the same board to signal "no change". */
   commit: (mutate: (board: BoardDoc) => BoardDoc) => void;
   /** One undoable step on any board, already validated by the command layer. */
@@ -153,6 +175,78 @@ export const useBoardStore = create<BoardState>()((set, get) => ({
     }));
     return board.id;
   },
+  renameBoard: (id, title) => {
+    const board = get().workspace.boards[id];
+    const clean = title.trim().slice(0, 120);
+    if (!board || !clean || clean === board.title) return;
+    get().commitTo(id, { ...board, title: clean });
+  },
+  duplicateBoard: (id) => {
+    const source = get().workspace.boards[id];
+    if (!source) return;
+    const copy: BoardDoc = {
+      ...emptyBoard(`${source.title} (kopya)`),
+      flowStyle: source.flowStyle,
+      connector: source.connector,
+      background: source.background,
+      items: cloneItems(source.items),
+    };
+    set((s) => {
+      const boards = [...s.workspace.manifest.boards];
+      const at = boards.findIndex((b) => b.id === id);
+      boards.splice(at + 1, 0, { id: copy.id, title: copy.title });
+      return {
+        workspace: {
+          manifest: { ...s.workspace.manifest, boards },
+          boards: { ...s.workspace.boards, [copy.id]: copy },
+        },
+        revisions: { ...s.revisions, [copy.id]: 1 },
+        history: { ...s.history, [copy.id]: emptyHistory() },
+        activeBoardId: copy.id,
+        selectedIds: [],
+        gesture: null,
+      };
+    });
+  },
+  deleteBoard: (id) => {
+    const s = get();
+    const list = s.workspace.manifest.boards;
+    const index = list.findIndex((b) => b.id === id);
+    const board = s.workspace.boards[id];
+    if (index < 0 || !board || list.length <= 1) return null;
+    const rest = list.filter((b) => b.id !== id);
+    const { [id]: _board, ...boards } = s.workspace.boards;
+    const { [id]: history, ...histories } = s.history;
+    const active =
+      s.activeBoardId === id ? rest[Math.min(index, rest.length - 1)].id : s.activeBoardId;
+    set({
+      workspace: { manifest: { ...s.workspace.manifest, boards: rest }, boards },
+      history: histories,
+      // The revision is kept so an AI still holding this board's id gets NO_BOARD, and a
+      // restored board continues counting up.
+      activeBoardId: active,
+      selectedIds: active === s.activeBoardId ? s.selectedIds : [],
+      gesture: null,
+    });
+    return { board, index, history };
+  },
+  restoreBoard: ({ board, index, history }) =>
+    set((s) => {
+      if (s.workspace.boards[board.id]) return s;
+      const boards = [...s.workspace.manifest.boards];
+      boards.splice(Math.min(index, boards.length), 0, { id: board.id, title: board.title });
+      return {
+        workspace: {
+          manifest: { ...s.workspace.manifest, boards },
+          boards: { ...s.workspace.boards, [board.id]: board },
+        },
+        revisions: { ...s.revisions, [board.id]: (s.revisions[board.id] ?? 0) + 1 },
+        history: { ...s.history, [board.id]: history ?? emptyHistory() },
+        activeBoardId: board.id,
+        selectedIds: [],
+        gesture: null,
+      };
+    }),
 
   commit: (mutate) =>
     set((s) => {

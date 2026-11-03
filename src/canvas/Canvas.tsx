@@ -15,6 +15,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { useCallback, useMemo, useRef, useState } from "react";
+import { contentsOf } from "../commands/geometry";
 import { makeEdge } from "../model/factory";
 import type { BoardDoc, ConnectorType, EdgeItem, NodeItem } from "../model/types";
 import { isEdgeItem, isNodeItem } from "../model/types";
@@ -27,6 +28,7 @@ import { RegionView } from "./nodes/RegionView";
 import { StrokeView } from "./nodes/StrokeView";
 import { RaelinEdge } from "./RaelinEdge";
 import { ToolOverlay } from "./ToolOverlay";
+import { useClipboard } from "./useClipboard";
 import { ZoomControl } from "./ZoomControl";
 
 const nodeTypes = {
@@ -172,6 +174,40 @@ export function Canvas({ stress }: { stress: boolean }) {
   // Boolean selector: re-renders only when crossing the threshold, not on every zoom frame.
   const far = useStore((s) => s.transform[2] < 0.5);
   const { nodes, edges } = useRfGraph(board, selectedIds, measured);
+  useClipboard();
+  /** While a region is dragged: where it and the items inside it started. */
+  const carry = useRef<{
+    regions: Map<string, { x: number; y: number }>;
+    items: Map<string, { x: number; y: number }>;
+  } | null>(null);
+
+  const startDrag = useCallback(
+    (dragged: Node[]) => {
+      beginGesture();
+      const b = useBoardStore.getState().workspace.boards[useBoardStore.getState().activeBoardId];
+      const draggedIds = new Set(dragged.map((n) => n.id));
+      const regions = new Map(
+        dragged.filter((n) => n.type === "region").map((n) => [n.id, { ...n.position }]),
+      );
+      if (!b || regions.size === 0) {
+        carry.current = null;
+        return;
+      }
+      const inside = contentsOf(b, new Set(regions.keys()));
+      const items = new Map<string, { x: number; y: number }>();
+      for (const item of b.items) {
+        if (item.kind === "edge" || draggedIds.has(item.id) || !inside.has(item.id)) continue;
+        items.set(item.id, { x: item.x, y: item.y });
+      }
+      carry.current = items.size > 0 ? { regions, items } : null;
+    },
+    [beginGesture],
+  );
+
+  const stopDrag = useCallback(() => {
+    carry.current = null;
+    endGesture();
+  }, [endGesture]);
 
   /** Controlled mode: selection arrives as "select" changes and must be written back. */
   const applySelectChanges = useCallback(
@@ -200,6 +236,20 @@ export function Canvas({ stress }: { stress: boolean }) {
         } else if (change.type === "dimensions" && change.dimensions) {
           newMeasured[change.id] = change.dimensions;
           if (change.setAttributes) sizes.set(change.id, change.dimensions);
+        }
+      }
+      // Items inside a dragged region follow it by the same offset.
+      const held = carry.current;
+      if (held) {
+        for (const [id, start] of held.regions) {
+          const now = moves.get(id);
+          if (!now) continue;
+          const dx = now.x - start.x;
+          const dy = now.y - start.y;
+          for (const [itemId, from] of held.items) {
+            moves.set(itemId, { x: from.x + dx, y: from.y + dy });
+          }
+          break;
         }
       }
       if (moves.size > 0 || sizes.size > 0) {
@@ -278,10 +328,10 @@ export function Canvas({ stress }: { stress: boolean }) {
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         onDelete={onDelete}
-        onNodeDragStart={beginGesture}
-        onNodeDragStop={endGesture}
-        onSelectionDragStart={beginGesture}
-        onSelectionDragStop={endGesture}
+        onNodeDragStart={(_, __, dragged) => startDrag(dragged)}
+        onNodeDragStop={stopDrag}
+        onSelectionDragStart={(_, dragged) => startDrag(dragged)}
+        onSelectionDragStop={stopDrag}
         connectionMode={ConnectionMode.Loose}
         connectionLineType={
           board.connector === "curve" ? ConnectionLineType.Bezier : ConnectionLineType.SmoothStep

@@ -20,6 +20,18 @@ const paths = {
     "M12 3.5a8.5 8.5 0 1 0 0 17c1.3 0 1.8-1 1.3-2-.6-1.2.2-2.5 1.6-2.5h1.6a4 4 0 0 0 4-4c0-4.7-3.8-8.5-8.5-8.5Z",
   fit: "M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5",
   sparkle: "M12 3.5l1.8 5.2 5.2 1.8-5.2 1.8L12 17.5l-1.8-5.2L5 10.5l5.2-1.8Z",
+  pencil: "M14.5 5.5l4 4L9 19H5v-4zM12.5 7.5l4 4",
+  trash: "M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13M10 11v5.5M14 11v5.5",
+  eraser:
+    "M8.5 19.5 3.8 14.8a1.6 1.6 0 0 1 0-2.3l8.4-8.4a1.6 1.6 0 0 1 2.3 0l4.7 4.7a1.6 1.6 0 0 1 0 2.3l-8.9 8.4ZM8 9l7.5 7.5M8.5 19.5H20",
+  alignLeft: "M4 4v16M8 7h11v3.5H8zM8 13.5h7V17H8z",
+  alignCenter: "M12 4v16M6 7h12v3.5H6zM8.5 13.5h7V17h-7z",
+  alignRight: "M20 4v16M5 7h11v3.5H5zM9 13.5h7V17H9z",
+  alignTop: "M4 4h16M7 8h3.5v11H7zM13.5 8H17v7h-3.5z",
+  alignMiddle: "M4 12h16M7 6h3.5v12H7zM13.5 8.5H17v7h-3.5z",
+  alignBottom: "M4 20h16M7 5h3.5v11H7zM13.5 9H17v7h-3.5z",
+  distributeH: "M4 4v16M20 4v16M9.5 8h5v8h-5z",
+  distributeV: "M4 4h16M4 20h16M8 9.5h8v5H8z",
 } as const;
 
 export type IconName = keyof typeof paths;

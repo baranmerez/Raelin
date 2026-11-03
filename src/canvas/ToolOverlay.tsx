@@ -1,10 +1,11 @@
 import { useReactFlow, useViewport } from "@xyflow/react";
 import { getStroke } from "perfect-freehand";
 import { type PointerEvent, useRef, useState } from "react";
+import { strokesAt } from "../commands/geometry";
 import { makeFlowNode, makeNote, makeRegion } from "../model/factory";
 import { newId } from "../model/ids";
 import type { BoardItem, StrokeItem } from "../model/types";
-import { type Tool, useBoardStore } from "../state/boardStore";
+import { removeItems, type Tool, useBoardStore } from "../state/boardStore";
 import { outlinePath, strokeOptions } from "./nodes/StrokeView";
 
 type Point = [number, number, number];
@@ -32,10 +33,15 @@ export function ToolOverlay() {
   const commit = useBoardStore((s) => s.commit);
   const setTool = useBoardStore((s) => s.setTool);
   const setSelection = useBoardStore((s) => s.setSelection);
+  const live = useBoardStore((s) => s.live);
+  const beginGesture = useBoardStore((s) => s.beginGesture);
+  const endGesture = useBoardStore((s) => s.endGesture);
   const { screenToFlowPosition } = useReactFlow();
   const { zoom } = useViewport();
   const overlay = useRef<HTMLDivElement>(null);
   const [points, setPoints] = useState<Point[] | null>(null);
+  const [erasing, setErasing] = useState(false);
+  const lastErase = useRef<{ x: number; y: number } | null>(null);
 
   if (tool === "select") return null;
 
@@ -75,8 +81,38 @@ export function ToolOverlay() {
     commit((b) => ({ ...b, items: [...b.items, stroke] }));
   };
 
+  /**
+   * One erase drag removes every stroke it touches as a single undo step. Pointer events
+   * arrive far apart on a fast drag, so the path since the last event is sampled too.
+   */
+  const eraseAt = (e: PointerEvent) => {
+    const pos = screenToFlowPosition({ x: e.clientX, y: e.clientY });
+    const from = lastErase.current ?? pos;
+    lastErase.current = pos;
+    const radius = 10 / zoom;
+    const steps = Math.max(1, Math.ceil(Math.hypot(pos.x - from.x, pos.y - from.y) / radius));
+    live((b) => {
+      const hits = new Set<string>();
+      for (let i = 0; i <= steps; i++) {
+        const t = i / steps;
+        const x = from.x + (pos.x - from.x) * t;
+        const y = from.y + (pos.y - from.y) * t;
+        for (const id of strokesAt(b, x, y, radius)) hits.add(id);
+      }
+      return hits.size > 0 ? removeItems(b, hits) : b;
+    });
+  };
+
   const onPointerDown = (e: PointerEvent<HTMLDivElement>) => {
     if (e.button !== 0) return;
+    if (tool === "eraser") {
+      e.currentTarget.setPointerCapture(e.pointerId);
+      beginGesture();
+      setErasing(true);
+      lastErase.current = null;
+      eraseAt(e);
+      return;
+    }
     if (tool === "pen") {
       e.currentTarget.setPointerCapture(e.pointerId);
       setPoints([local(e)]);
@@ -109,12 +145,19 @@ export function ToolOverlay() {
       onPointerDown={onPointerDown}
       onPointerMove={(e) => {
         if (points) setPoints([...points, local(e)]);
+        if (erasing) eraseAt(e);
       }}
       onPointerUp={() => {
         if (points) finishStroke(points);
         setPoints(null);
+        if (erasing) endGesture();
+        setErasing(false);
       }}
-      onPointerCancel={() => setPoints(null)}
+      onPointerCancel={() => {
+        setPoints(null);
+        if (erasing) endGesture();
+        setErasing(false);
+      }}
     >
       {preview && (
         <svg className="stroke-preview" aria-hidden="true">

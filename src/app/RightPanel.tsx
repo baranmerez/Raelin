@@ -1,5 +1,7 @@
+import { useReactFlow } from "@xyflow/react";
 import { AnimatePresence, motion } from "motion/react";
 import { useShallow } from "zustand/react/shallow";
+import { type AlignMode, alignItems } from "../commands/align";
 import { useMcpStatus } from "../mcp/connection";
 import { shapeSize } from "../model/factory";
 import { penColors, toneOrder, tones } from "../model/tones";
@@ -13,6 +15,7 @@ import type {
 } from "../model/types";
 import { isDesktop } from "../platform/storage";
 import { mapItems, useBoardStore } from "../state/boardStore";
+import { Icon, type IconName } from "../ui/Icon";
 
 const flowStyles: { id: FlowStyle; label: string }[] = [
   { id: "pastel", label: "Pastel" },
@@ -24,6 +27,17 @@ const connectors: { id: ConnectorType; label: string }[] = [
   { id: "elbow", label: "Dirsek" },
   { id: "curve", label: "Eğri" },
   { id: "straight", label: "Düz" },
+];
+
+const alignModes: { id: AlignMode; icon: IconName; label: string }[] = [
+  { id: "left", icon: "alignLeft", label: "Sola hizala" },
+  { id: "center", icon: "alignCenter", label: "Yatayda ortala" },
+  { id: "right", icon: "alignRight", label: "Sağa hizala" },
+  { id: "top", icon: "alignTop", label: "Üste hizala" },
+  { id: "middle", icon: "alignMiddle", label: "Dikeyde ortala" },
+  { id: "bottom", icon: "alignBottom", label: "Alta hizala" },
+  { id: "distributeH", icon: "distributeH", label: "Yatay aralıkları eşitle" },
+  { id: "distributeV", icon: "distributeV", label: "Dikey aralıkları eşitle" },
 ];
 
 const shapes: { id: FlowShape; label: string }[] = [
@@ -58,6 +72,8 @@ interface PanelSummary {
   flowStyle: FlowStyle;
   connector: ConnectorType;
   tonableCount: number;
+  /** Selected nodes that can be aligned (everything but edges and strokes). */
+  alignCount: number;
   tone: ToneName | null;
   flowCount: number;
   shape: FlowShape | "mixed" | null;
@@ -80,6 +96,7 @@ function summarize(state: ReturnType<typeof useBoardStore.getState>): PanelSumma
     flowStyle: board.flowStyle,
     connector: board.connector,
     tonableCount: 0,
+    alignCount: 0,
     tone: null,
     flowCount: 0,
     shape: null,
@@ -96,6 +113,7 @@ function summarize(state: ReturnType<typeof useBoardStore.getState>): PanelSumma
       continue;
     }
     if (item.kind === "stroke") continue;
+    summary.alignCount++;
     summary.tonableCount++;
     summary.tone ??= item.tone;
     if (item.kind === "flowNode") {
@@ -125,6 +143,7 @@ export function RightPanel() {
   const penSize = useBoardStore((s) => s.penSize);
   const setPen = useBoardStore((s) => s.setPen);
   const commit = useBoardStore((s) => s.commit);
+  const { getNode } = useReactFlow();
   if (!summary) return null;
 
   const currentTone = summary.tone;
@@ -155,6 +174,17 @@ export function RightPanel() {
         ...size,
       };
     });
+
+  const align = (mode: AlignMode) => {
+    const selected = new Set(useBoardStore.getState().selectedIds);
+    // Notes grow with their text, so the canvas knows their real height.
+    commit((b) =>
+      alignItems(b, selected, mode, (item) => {
+        const m = getNode(item.id)?.measured;
+        return m?.width && m.height ? { width: m.width, height: m.height } : undefined;
+      }),
+    );
+  };
 
   return (
     <aside className="right-panel" aria-label="Özellikler">
@@ -198,6 +228,33 @@ export function RightPanel() {
                   aria-label={tones[tone].label}
                   title={tones[tone].label}
                 />
+              ))}
+            </div>
+          </motion.section>
+        )}
+        {summary.alignCount > 1 && (
+          <motion.section
+            key="align"
+            className="panel-section"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.2 }}
+          >
+            <h3 className="field-label">Hizala</h3>
+            <div className="align-grid">
+              {alignModes.map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  className="align-button"
+                  onClick={() => align(m.id)}
+                  disabled={m.id.startsWith("distribute") && summary.alignCount < 3}
+                  aria-label={m.label}
+                  title={m.label}
+                >
+                  <Icon name={m.icon} size={18} />
+                </button>
               ))}
             </div>
           </motion.section>
@@ -326,6 +383,12 @@ export function RightPanel() {
           </li>
           <li>
             <kbd>Del</kbd> seçimi sil
+          </li>
+          <li>
+            <kbd>Ctrl</kbd> + <kbd>C</kbd> / <kbd>V</kbd> / <kbd>D</kbd> kopyala, yapıştır, çoğalt
+          </li>
+          <li>
+            <kbd>E</kbd> silgi · sekmede çift tık: yeniden adlandır
           </li>
         </ul>
       </section>
