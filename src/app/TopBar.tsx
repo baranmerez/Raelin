@@ -118,7 +118,7 @@ export function TopBar() {
       <button
         type="button"
         className="ghost-button"
-        onClick={openNow}
+        onClick={() => void openNow()}
         disabled={!isDesktop}
         title="Aç (Ctrl+O)"
       >

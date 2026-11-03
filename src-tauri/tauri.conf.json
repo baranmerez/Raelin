@@ -36,6 +36,15 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "externalBin": ["binaries/raelin-mcp"]
+    "externalBin": ["binaries/raelin-mcp"],
+    "fileAssociations": [
+      {
+        "ext": ["raelin"],
+        "name": "Raelin",
+        "description": "Raelin çalışma alanı",
+        "role": "Editor",
+        "mimeType": "application/x-raelin"
+      }
+    ]
   }
 }

@@ -5,6 +5,7 @@ import {
   confirmAction,
   isDesktop,
   openWorkspace,
+  readWorkspaceFile,
   saveMarkdownFile,
   saveWorkspace,
 } from "../platform/storage";
@@ -42,7 +43,8 @@ export async function saveNow(options: { saveAs?: boolean } = {}): Promise<void>
   }
 }
 
-export async function openNow(): Promise<void> {
+/** Opens a workspace file: the given (already approved) path, or one picked in a dialog. */
+export async function openNow(path?: string): Promise<void> {
   const { loadWorkspace, showToast } = useBoardStore.getState();
   if (
     isDirty() &&
@@ -51,7 +53,7 @@ export async function openNow(): Promise<void> {
     return;
   }
   try {
-    const result = await openWorkspace();
+    const result = path ? await readWorkspaceFile(path) : await openWorkspace();
     if (!result) return;
     loadWorkspace(result.workspace, result.origin, true);
     clearRecovery();

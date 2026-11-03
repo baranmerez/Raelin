@@ -1,3 +1,4 @@
+import { listen } from "@tauri-apps/api/event";
 import { ReactFlowProvider } from "@xyflow/react";
 import { useEffect, useState } from "react";
 import { openNow, saveNow } from "./app/actions";
@@ -14,7 +15,10 @@ import type { Workspace } from "./model/types";
 import { formatVersion } from "./model/types";
 import {
   clearRecovery,
+  confirmAction,
+  isDesktop,
   readLastPath,
+  readLaunchPath,
   readRecovery,
   readWorkspaceFile,
   type WorkspaceOrigin,
@@ -70,6 +74,25 @@ async function initialWorkspace(): Promise<Startup> {
     };
   }
   const recovered = validRecovery();
+  const launchPath = await readLaunchPath();
+  if (launchPath) {
+    // A double-clicked file wins, but never silently over unsaved edits.
+    const name = launchPath.slice(launchPath.lastIndexOf("\\") + 1);
+    const leave =
+      !recovered ||
+      (await confirmAction(
+        `Kaydedilmemiş değişiklikler var. Bunları bırakıp "${name}" açılsın mı?`,
+      ));
+    if (leave) {
+      try {
+        const { workspace, origin } = await readWorkspaceFile(launchPath);
+        return { workspace, origin, saved: true };
+      } catch (error) {
+        const fallback = recovered ?? { workspace: seedWorkspace(), origin: null, saved: true };
+        return { ...fallback, notice: `"${name}" açılamadı: ${String(error)}` };
+      }
+    }
+  }
   const lastPath = await readLastPath();
   if (recovered) {
     // The recovery copy holds no pictures; take the saved ones from the file it came from.
@@ -169,6 +192,10 @@ export default function App() {
       store.loadWorkspace(workspace, origin, saved);
       if (notice) store.showToast(notice);
       setReady(true);
+      // A .raelin file double-clicked while Raelin runs arrives from the second launch.
+      if (isDesktop) {
+        void listen<string>("workspace:open", (e) => void openNow(e.payload));
+      }
       // Accept AI clients only once a workspace is loaded.
       void startMcpHost().catch((error) =>
         store.showToast(`MCP başlatılamadı: ${String(error)}`, "error"),

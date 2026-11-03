@@ -7,16 +7,21 @@ use tauri::Manager;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        // Must be first: a second launch just focuses the existing window, so AI clients
-        // always talk to exactly one Raelin.
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+        // Must be first: a second launch just focuses the existing window (and hands over
+        // a double-clicked file), so AI clients always talk to exactly one Raelin.
+        .plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.unminimize();
                 let _ = window.set_focus();
             }
+            workspace::open_from_second_launch(app, &args, &cwd);
         }))
         .plugin(tauri_plugin_dialog::init())
         .manage(workspace::Allowed::default())
+        .manage(workspace::LaunchFile::new(workspace::workspace_arg(
+            &std::env::args().collect::<Vec<_>>(),
+            &std::env::current_dir().unwrap_or_default(),
+        )))
         .setup(|app| {
             let host = mcp::McpHost::new(app.handle())?;
             app.manage(Arc::new(host));
@@ -26,6 +31,7 @@ pub fn run() {
             workspace::pick_workspace_open,
             workspace::pick_workspace_save,
             workspace::last_workspace_file,
+            workspace::launch_file,
             workspace::is_workspace_allowed,
             workspace::probe_workspace_file,
             workspace::read_workspace_file,

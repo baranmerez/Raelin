@@ -153,6 +153,16 @@ export function clearRecovery(): void {
   }
 }
 
+/** The `.raelin` file Raelin was started with (double-click), once; null otherwise. */
+export async function readLaunchPath(): Promise<string | null> {
+  if (!isDesktop) return null;
+  try {
+    return await invoke<string | null>("launch_file");
+  } catch {
+    return null;
+  }
+}
+
 /** Last workspace file Raelin itself read or wrote (stored by Rust, not by the page). */
 export async function readLastPath(): Promise<string | null> {
   if (!isDesktop) return null;

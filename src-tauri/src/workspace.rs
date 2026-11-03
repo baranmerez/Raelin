@@ -10,7 +10,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::UNIX_EPOCH;
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_dialog::DialogExt;
 
 const EXTENSION: &str = "raelin";
@@ -54,6 +54,39 @@ impl Allowed {
         } else {
             Err("Bu dosyaya yazma izni yok; kaydetme yerini yeniden seç.".into())
         }
+    }
+}
+
+/// Workspace file Raelin was started with (double-click in Explorer), handed out once.
+#[derive(Default)]
+pub struct LaunchFile(Mutex<Option<PathBuf>>);
+
+impl LaunchFile {
+    pub fn new(path: Option<PathBuf>) -> Self {
+        Self(Mutex::new(path))
+    }
+}
+
+/// Event that tells the page to open a workspace file passed to a second launch.
+pub const OPEN_EVENT: &str = "workspace:open";
+
+/// The first existing `.raelin` file among command-line arguments (program path excluded).
+/// Relative paths are taken from `cwd`, the folder the launch came from.
+pub fn workspace_arg(args: &[String], cwd: &Path) -> Option<PathBuf> {
+    args.iter().skip(1).find_map(|arg| {
+        let path = cwd.join(arg);
+        (is_workspace_path(&path) && path.is_file()).then_some(path)
+    })
+}
+
+/// A second launch with a file: approve it like a dialog pick and let the page open it.
+pub fn open_from_second_launch(app: &AppHandle, args: &[String], cwd: &str) {
+    let Some(path) = workspace_arg(args, Path::new(cwd)) else {
+        return;
+    };
+    let state = app.state::<Allowed>();
+    if state.allow_workspace(&path).is_ok() {
+        let _ = app.emit(OPEN_EVENT, path.to_string_lossy().into_owned());
     }
 }
 
@@ -190,6 +223,14 @@ pub fn last_workspace_file(app: AppHandle, state: State<'_, Allowed>) -> Option<
     if !path.is_file() || state.allow_workspace(&path).is_err() {
         return None;
     }
+    Some(path.to_string_lossy().into_owned())
+}
+
+/// The file Raelin was started with, approved for this run; `None` after the first call.
+#[tauri::command]
+pub fn launch_file(state: State<'_, Allowed>, launch: State<'_, LaunchFile>) -> Option<String> {
+    let path = lock(&launch.0).ok()?.take()?;
+    state.allow_workspace(&path).ok()?;
     Some(path.to_string_lossy().into_owned())
 }
 
@@ -357,6 +398,31 @@ mod tests {
                 .allow_workspace(Path::new("relative.raelin"))
                 .is_err()
         );
+    }
+
+    #[test]
+    fn launch_argument_must_be_an_existing_raelin_file() {
+        let dir = std::env::temp_dir();
+        let file = dir.join("raelin-launch-test.raelin");
+        fs::write(&file, "{}").unwrap();
+        let args = |rest: &[&str]| {
+            std::iter::once("raelin.exe")
+                .chain(rest.iter().copied())
+                .map(String::from)
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            workspace_arg(&args(&["--flag", "raelin-launch-test.raelin"]), &dir),
+            Some(dir.join("raelin-launch-test.raelin"))
+        );
+        assert_eq!(workspace_arg(&args(&["missing.raelin"]), &dir), None);
+        assert_eq!(workspace_arg(&args(&["notes.txt"]), &dir), None);
+        // The program path itself never counts.
+        assert_eq!(
+            workspace_arg(&[file.to_string_lossy().into_owned()], &dir),
+            None
+        );
+        let _ = fs::remove_file(&file);
     }
 
     #[test]
