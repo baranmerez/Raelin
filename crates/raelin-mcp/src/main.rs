@@ -59,7 +59,18 @@ async fn open_pipe() -> Result<Pipe, String> {
     let deadline = Instant::now() + Duration::from_secs(3);
     loop {
         match ClientOptions::new().open(&name) {
-            Ok(client) => return Ok(client),
+            Ok(client) => {
+                use std::os::windows::io::AsRawHandle;
+                // The name is predictable: make sure our own user serves it before the
+                // token or any MCP line goes out.
+                // SAFETY: `client` is a connected pipe client and outlives the call.
+                if !unsafe {
+                    raelin_pipe::identity::pipe_server_is_current_user(client.as_raw_handle())
+                } {
+                    return Err("Raelin kanalını başka bir kullanıcı açmış; bağlanılmadı.".into());
+                }
+                return Ok(client);
+            }
             Err(e) if e.raw_os_error() == Some(ERROR_PIPE_BUSY) && Instant::now() < deadline => {
                 tokio::time::sleep(Duration::from_millis(50)).await;
             }
@@ -116,6 +127,11 @@ fn envelope(line: &str) -> Option<(Value, Envelope)> {
         .map(str::to_owned);
     let id = value.get("id").filter(|id| !id.is_null()).cloned();
     Some((value, Envelope { method, id }))
+}
+
+/// Tells the client to fetch the tool list again (after (re)connecting to the app).
+fn list_changed() -> String {
+    json!({ "jsonrpc": "2.0", "method": "notifications/tools/list_changed" }).to_string()
 }
 
 fn error_reply(id: &Value, message: &str) -> String {
@@ -214,7 +230,11 @@ impl Bridge {
             self.initialized = true;
         }
         if self.link.is_none() {
-            self.try_connect(method != Some("initialize")).await;
+            let replay = method != Some("initialize");
+            // A client that initialized while the app was closed holds an empty tool list.
+            if self.try_connect(replay).await && replay && self.initialized {
+                write_line(out, &list_changed()).await?;
+            }
         }
         if let Some(link) = &mut self.link {
             if write_line(&mut link.write, line).await.is_ok() {
@@ -277,8 +297,7 @@ async fn run() -> Result<(), String> {
             },
             _ = retry.tick(), if bridge.link.is_none() && bridge.initialize.is_some() => {
                 if bridge.try_connect(true).await {
-                    let note = json!({ "jsonrpc": "2.0", "method": "notifications/tools/list_changed" });
-                    write_line(&mut to_client, &note.to_string()).await.map_err(io)?;
+                    write_line(&mut to_client, &list_changed()).await.map_err(io)?;
                 }
             },
         }

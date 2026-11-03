@@ -4,6 +4,9 @@
 //! After the handshake both sides exchange newline-delimited JSON-RPC (the MCP stdio
 //! framing) unchanged; the app forwards it to the UI, where the MCP server runs.
 
+#[cfg(windows)]
+pub mod identity;
+
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 

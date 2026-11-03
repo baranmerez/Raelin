@@ -274,7 +274,7 @@ fn create_pipe(name: &str, first: bool) -> std::io::Result<NamedPipeServer> {
     };
     use windows_sys::Win32::Security::{PSECURITY_DESCRIPTOR, SECURITY_ATTRIBUTES};
 
-    let sid = current_user_sid()?;
+    let sid = raelin_pipe::identity::current_user_sid()?;
     // Protected DACL: full access for this user and SYSTEM, nobody else.
     let sddl: Vec<u16> = format!("D:P(A;;GA;;;{sid})(A;;GA;;;SY)\0")
         .encode_utf16()
@@ -315,46 +315,6 @@ fn create_pipe(name: &str, first: bool) -> std::io::Result<NamedPipeServer> {
 }
 
 /// SID string ("S-1-5-21-...") of the user running the app.
-#[cfg(windows)]
-fn current_user_sid() -> std::io::Result<String> {
-    use windows_sys::Win32::Foundation::{CloseHandle, HANDLE, LocalFree};
-    use windows_sys::Win32::Security::Authorization::ConvertSidToStringSidW;
-    use windows_sys::Win32::Security::{GetTokenInformation, TOKEN_QUERY, TOKEN_USER, TokenUser};
-    use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
-
-    // SAFETY: standard token query on our own process; every handle and buffer is
-    // checked and released before returning.
-    unsafe {
-        let mut token: HANDLE = std::ptr::null_mut();
-        if OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token) == 0 {
-            return Err(std::io::Error::last_os_error());
-        }
-        let mut needed = 0u32;
-        GetTokenInformation(token, TokenUser, std::ptr::null_mut(), 0, &mut needed);
-        let mut buffer = vec![0u8; needed as usize];
-        let ok = GetTokenInformation(
-            token,
-            TokenUser,
-            buffer.as_mut_ptr().cast(),
-            needed,
-            &mut needed,
-        );
-        CloseHandle(token);
-        if ok == 0 {
-            return Err(std::io::Error::last_os_error());
-        }
-        let user = &*(buffer.as_ptr() as *const TOKEN_USER);
-        let mut text: *mut u16 = std::ptr::null_mut();
-        if ConvertSidToStringSidW(user.User.Sid, &mut text) == 0 {
-            return Err(std::io::Error::last_os_error());
-        }
-        let len = (0..).take_while(|&i| *text.add(i) != 0).count();
-        let sid = String::from_utf16_lossy(std::slice::from_raw_parts(text, len));
-        LocalFree(text as _);
-        Ok(sid)
-    }
-}
-
 #[cfg(not(windows))]
 fn create_pipe(_name: &str, _first: bool) -> std::io::Result<NamedPipeServer> {
     Err(std::io::Error::other(
@@ -381,11 +341,5 @@ mod tests {
         assert!(text.contains(r#""tool":"read_board""#));
         assert!(!text.contains("secret"));
         let _ = fs::remove_file(&file);
-    }
-
-    #[cfg(windows)]
-    #[test]
-    fn finds_the_current_user_sid() {
-        assert!(current_user_sid().unwrap().starts_with("S-1-"));
     }
 }
