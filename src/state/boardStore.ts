@@ -15,13 +15,15 @@ export type Tool =
   | "note"
   | "region";
 
-/** One undo step: the board before the change and, for AI changes, who made it. */
-interface Step {
+/** One undo step: the board before the change, when it happened and, for AI changes, who made it. */
+export interface Step {
   board: BoardDoc;
   label?: string;
+  /** Epoch ms of the change; kept when the step moves between undo and redo. */
+  at: number;
 }
 
-interface History {
+export interface History {
   past: Step[];
   future: Step[];
 }
@@ -70,8 +72,8 @@ interface BoardState {
   createBoard: (title: string) => string;
   /** Undoable on that board; the manifest title follows the board title when saving. */
   renameBoard: (id: string, title: string) => void;
-  /** Copy with fresh ids, placed right after the original and opened. */
-  duplicateBoard: (id: string) => void;
+  /** Copy with fresh ids, placed right after the original and opened unless open is false. */
+  duplicateBoard: (id: string, options?: { open?: boolean; title?: string }) => string | null;
   /** Removes a board (never the last one) and returns what restoreBoard needs. */
   deleteBoard: (id: string) => RemovedBoard | null;
   restoreBoard: (removed: RemovedBoard) => void;
@@ -96,8 +98,8 @@ function emptyHistory(): History {
   return { past: [], future: [] };
 }
 
-function pushPast(history: History | undefined, step: Step): History {
-  const past = [...(history?.past ?? []), step];
+function pushPast(history: History | undefined, step: Omit<Step, "at">): History {
+  const past = [...(history?.past ?? []), { ...step, at: Date.now() }];
   if (past.length > historyLimit) past.shift();
   return { past, future: [] };
 }
@@ -122,7 +124,7 @@ function undoOn(s: State, id: string): Partial<State> | State {
       ...s.history,
       [id]: {
         past: history.past.slice(0, -1),
-        future: [{ board: s.workspace.boards[id], label: previous.label }, ...history.future],
+        future: [{ ...previous, board: s.workspace.boards[id] }, ...history.future],
       },
     },
     selectedIds: id === s.activeBoardId ? [] : s.selectedIds,
@@ -181,11 +183,12 @@ export const useBoardStore = create<BoardState>()((set, get) => ({
     if (!board || !clean || clean === board.title) return;
     get().commitTo(id, { ...board, title: clean });
   },
-  duplicateBoard: (id) => {
+  duplicateBoard: (id, options = {}) => {
     const source = get().workspace.boards[id];
-    if (!source) return;
+    if (!source) return null;
+    const open = options.open ?? true;
     const copy: BoardDoc = {
-      ...emptyBoard(`${source.title} (kopya)`),
+      ...emptyBoard(options.title?.trim().slice(0, 120) || `${source.title} (kopya)`),
       flowStyle: source.flowStyle,
       connector: source.connector,
       background: source.background,
@@ -202,11 +205,10 @@ export const useBoardStore = create<BoardState>()((set, get) => ({
         },
         revisions: { ...s.revisions, [copy.id]: 1 },
         history: { ...s.history, [copy.id]: emptyHistory() },
-        activeBoardId: copy.id,
-        selectedIds: [],
-        gesture: null,
+        ...(open ? { activeBoardId: copy.id, selectedIds: [], gesture: null } : {}),
       };
     });
+    return copy.id;
   },
   deleteBoard: (id) => {
     const s = get();
@@ -329,7 +331,7 @@ export const useBoardStore = create<BoardState>()((set, get) => ({
         history: {
           ...s.history,
           [id]: {
-            past: [...history.past, { board: s.workspace.boards[id], label: next.label }],
+            past: [...history.past, { ...next, board: s.workspace.boards[id] }],
             future: history.future.slice(1),
           },
         },
