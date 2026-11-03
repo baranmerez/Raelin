@@ -9,7 +9,8 @@ export function Toast() {
   useEffect(() => {
     if (!toast) return;
     setVisible(true);
-    const timer = setTimeout(() => setVisible(false), toast.tone === "error" ? 6000 : 2600);
+    const long = toast.tone === "error" || toast.action;
+    const timer = setTimeout(() => setVisible(false), long ? 7000 : 2600);
     return () => clearTimeout(timer);
   }, [toast]);
 
@@ -26,6 +27,18 @@ export function Toast() {
             transition={{ type: "spring", bounce: 0.3, duration: 0.4 }}
           >
             {toast.text}
+            {toast.action && (
+              <button
+                type="button"
+                className="toast-action"
+                onClick={() => {
+                  toast.action?.run();
+                  setVisible(false);
+                }}
+              >
+                {toast.action.label}
+              </button>
+            )}
           </motion.div>
         )}
       </AnimatePresence>

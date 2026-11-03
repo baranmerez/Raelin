@@ -7,6 +7,7 @@ import { RightPanel } from "./app/RightPanel";
 import { Toast } from "./app/Toast";
 import { TopBar } from "./app/TopBar";
 import { Canvas } from "./canvas/Canvas";
+import { startMcpHost } from "./mcp/connection";
 import { seedWorkspace, stressBoard } from "./model/seed";
 import { parseWorkspace, serializeBoard, serializeManifest } from "./model/serialize";
 import type { Workspace } from "./model/types";
@@ -162,6 +163,10 @@ export default function App() {
       store.loadWorkspace(workspace, origin, saved);
       if (notice) store.showToast(notice);
       setReady(true);
+      // Accept AI clients only once a workspace is loaded.
+      void startMcpHost().catch((error) =>
+        store.showToast(`MCP başlatılamadı: ${String(error)}`, "error"),
+      );
     });
     return () => {
       cancelled = true;

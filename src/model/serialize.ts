@@ -94,22 +94,30 @@ export function parseBoard(text: string): BoardDoc {
   if (!isSafeId(data.id) || !Array.isArray(data.items) || !isStr(data.title)) {
     throw new FormatError("Pano dosyası eksik veya bozuk.");
   }
+  validateItems(data.items);
+  return data;
+}
+
+/**
+ * Invariants every board must hold, whether it came from a file, the UI or an AI client.
+ * Throws FormatError with the first problem found.
+ */
+export function validateItems(items: readonly BoardItem[]): void {
   const nodeIds = new Set<string>();
   const ids = new Set<string>();
-  for (const item of data.items as BoardItem[]) {
+  for (const item of items) {
     const problem = itemProblem(item);
     if (problem) throw new FormatError(`Öğe ${String(item?.id)}: ${problem}`);
     if (ids.has(item.id)) throw new FormatError(`Tekrarlanan öğe kimliği: ${item.id}`);
     ids.add(item.id);
     if (item.kind !== "edge") nodeIds.add(item.id);
   }
-  for (const item of data.items) {
+  for (const item of items) {
     // Edges must connect two nodes; an edge pointing at another edge is invalid too.
     if (item.kind === "edge" && (!nodeIds.has(item.source) || !nodeIds.has(item.target))) {
       throw new FormatError(`Bağlantı olmayan bir öğeyi gösteriyor: ${item.id}`);
     }
   }
-  return data;
 }
 
 export function parseManifest(text: string): WorkspaceManifest {

@@ -641,6 +641,42 @@ button {
   flex: 1;
 }
 
+.mcp-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--paper-2);
+  color: var(--ink-soft);
+  font-size: 13.5px;
+}
+
+.mcp-chip.is-on {
+  background: #e2eedb;
+  color: #2b4321;
+}
+
+.mcp-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--ink-faint);
+}
+
+.mcp-chip.is-on .mcp-dot {
+  background: #5f9a4c;
+  box-shadow: 0 0 0 3px rgba(95, 154, 76, 0.2);
+  animation: mcp-pulse 2.4s var(--ease) infinite;
+}
+
+@keyframes mcp-pulse {
+  50% {
+    box-shadow: 0 0 0 6px rgba(95, 154, 76, 0.05);
+  }
+}
+
 .panel-help {
   border-bottom: 0;
 }
@@ -1274,6 +1310,27 @@ kbd {
   color: #fff;
   font-size: 14.5px;
   box-shadow: var(--shadow-lg);
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.toast-action {
+  pointer-events: auto;
+  padding: 4px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 8px;
+  background: transparent;
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.toast-action:hover {
+  background: rgba(255, 255, 255, 0.12);
 }
 
 .toast.is-error {

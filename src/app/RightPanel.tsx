@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useShallow } from "zustand/react/shallow";
+import { useMcpStatus } from "../mcp/connection";
 import { shapeSize } from "../model/factory";
 import { penColors, toneOrder, tones } from "../model/tones";
 import type {
@@ -10,6 +11,7 @@ import type {
   FlowStyle,
   ToneName,
 } from "../model/types";
+import { isDesktop } from "../platform/storage";
 import { mapItems, useBoardStore } from "../state/boardStore";
 
 const flowStyles: { id: FlowStyle; label: string }[] = [
@@ -102,6 +104,18 @@ function summarize(state: ReturnType<typeof useBoardStore.getState>): PanelSumma
     }
   }
   return summary;
+}
+
+function McpChip() {
+  const clients = useMcpStatus(useShallow((s) => Object.values(s.clients)));
+  if (!isDesktop) return null;
+  const connected = clients.length > 0;
+  return (
+    <div className={`mcp-chip${connected ? " is-on" : ""}`} role="status">
+      <span className="mcp-dot" aria-hidden="true" />
+      {connected ? `MCP bağlı · ${[...new Set(clients)].join(", ")}` : "MCP bekliyor"}
+    </div>
+  );
 }
 
 export function RightPanel() {
@@ -295,6 +309,8 @@ export function RightPanel() {
       </section>
 
       <div className="panel-spacer" />
+
+      <McpChip />
 
       <section className="panel-section panel-help">
         <h3 className="field-label">Kısayollar</h3>

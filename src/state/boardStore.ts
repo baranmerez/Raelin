@@ -1,19 +1,27 @@
 import { create } from "zustand";
 import { emptyBoard } from "../model/factory";
+import { FormatError, validateItems } from "../model/serialize";
 import type { BoardDoc, BoardItem, Workspace } from "../model/types";
 import type { WorkspaceOrigin } from "../platform/storage";
 
 export type Tool = "select" | "pen" | "process" | "decision" | "terminal" | "note" | "region";
 
-interface History {
-  past: BoardDoc[];
-  future: BoardDoc[];
+/** One undo step: the board before the change and, for AI changes, who made it. */
+interface Step {
+  board: BoardDoc;
+  label?: string;
 }
 
-interface Toast {
+interface History {
+  past: Step[];
+  future: Step[];
+}
+
+export interface Toast {
   id: number;
   text: string;
   tone: "ok" | "error";
+  action?: { label: string; run: () => void };
 }
 
 const historyLimit = 200;
@@ -22,6 +30,11 @@ interface BoardState {
   workspace: Workspace;
   activeBoardId: string;
   history: Record<string, History>;
+  /**
+   * Runtime revision per board, bumped on every change (UI, AI, undo). AI writes must
+   * name the revision they read; it is never stored in files.
+   */
+  revisions: Record<string, number>;
   gesture: { base: BoardDoc; pushed: boolean } | null;
   selectedIds: string[];
   tool: Tool;
@@ -38,34 +51,68 @@ interface BoardState {
   setSelection: (ids: string[]) => void;
   selectBoard: (id: string) => void;
   addBoard: (title: string) => void;
-  /** One undoable step. Return the same board to signal "no change". */
+  /** New board without switching to it (AI clients). Returns its id. */
+  createBoard: (title: string) => string;
+  /** One undoable step on the active board. Return the same board to signal "no change". */
   commit: (mutate: (board: BoardDoc) => BoardDoc) => void;
+  /** One undoable step on any board, already validated by the command layer. */
+  commitTo: (boardId: string, next: BoardDoc, label?: string) => number;
   /** Drag/resize/typing: many live updates that undo as one step. */
   beginGesture: () => void;
   live: (mutate: (board: BoardDoc) => BoardDoc) => void;
   endGesture: () => void;
   undo: () => void;
   redo: () => void;
+  undoBoard: (boardId: string) => void;
   loadWorkspace: (workspace: Workspace, origin: WorkspaceOrigin | null, saved: boolean) => void;
   /** written is the workspace object that was serialized; edits made during the save stay dirty. */
   markSaved: (origin: WorkspaceOrigin, written: Workspace) => void;
-  showToast: (text: string, tone?: Toast["tone"]) => void;
+  showToast: (text: string, tone?: Toast["tone"], action?: Toast["action"]) => void;
 }
 
 function emptyHistory(): History {
   return { past: [], future: [] };
 }
 
-function pushPast(history: History | undefined, board: BoardDoc): History {
-  const past = [...(history?.past ?? []), board];
+function pushPast(history: History | undefined, step: Step): History {
+  const past = [...(history?.past ?? []), step];
   if (past.length > historyLimit) past.shift();
   return { past, future: [] };
+}
+
+type State = BoardState;
+
+/** Workspace + revision patch for replacing one board. */
+function withBoard(s: State, next: BoardDoc): Pick<State, "workspace" | "revisions"> {
+  return {
+    workspace: { ...s.workspace, boards: { ...s.workspace.boards, [next.id]: next } },
+    revisions: { ...s.revisions, [next.id]: (s.revisions[next.id] ?? 0) + 1 },
+  };
+}
+
+function undoOn(s: State, id: string): Partial<State> | State {
+  const history = s.history[id];
+  const previous = history?.past.at(-1);
+  if (!history || !previous) return s;
+  return {
+    ...withBoard(s, previous.board),
+    history: {
+      ...s.history,
+      [id]: {
+        past: history.past.slice(0, -1),
+        future: [{ board: s.workspace.boards[id], label: previous.label }, ...history.future],
+      },
+    },
+    selectedIds: id === s.activeBoardId ? [] : s.selectedIds,
+    gesture: null,
+  };
 }
 
 export const useBoardStore = create<BoardState>()((set, get) => ({
   workspace: { manifest: { formatVersion: 1, title: "", boards: [] }, boards: {} },
   activeBoardId: "",
   history: {},
+  revisions: {},
   gesture: null,
   selectedIds: [],
   tool: "select",
@@ -87,22 +134,25 @@ export const useBoardStore = create<BoardState>()((set, get) => ({
     if (!get().workspace.boards[id]) return;
     set({ activeBoardId: id, selectedIds: [], gesture: null });
   },
-  addBoard: (title) =>
-    set((s) => {
-      const board = emptyBoard(title);
-      return {
-        workspace: {
-          manifest: {
-            ...s.workspace.manifest,
-            boards: [...s.workspace.manifest.boards, { id: board.id, title }],
-          },
-          boards: { ...s.workspace.boards, [board.id]: board },
+  addBoard: (title) => {
+    const id = get().createBoard(title);
+    set({ activeBoardId: id, selectedIds: [], gesture: null });
+  },
+  createBoard: (title) => {
+    const board = emptyBoard(title);
+    set((s) => ({
+      workspace: {
+        manifest: {
+          ...s.workspace.manifest,
+          boards: [...s.workspace.manifest.boards, { id: board.id, title }],
         },
-        activeBoardId: board.id,
-        selectedIds: [],
-        gesture: null,
-      };
-    }),
+        boards: { ...s.workspace.boards, [board.id]: board },
+      },
+      revisions: { ...s.revisions, [board.id]: 1 },
+      history: { ...s.history, [board.id]: emptyHistory() },
+    }));
+    return board.id;
+  },
 
   commit: (mutate) =>
     set((s) => {
@@ -110,14 +160,40 @@ export const useBoardStore = create<BoardState>()((set, get) => ({
       if (!board) return s;
       const next = mutate(board);
       if (next === board) return s;
+      // UI edits pass the same invariants as files and AI batches.
+      try {
+        validateItems(next.items);
+      } catch (error) {
+        const text = error instanceof FormatError ? error.message : String(error);
+        return { toast: { id: Date.now(), text: `Değişiklik reddedildi: ${text}`, tone: "error" } };
+      }
       return {
-        workspace: { ...s.workspace, boards: { ...s.workspace.boards, [board.id]: next } },
-        history: { ...s.history, [board.id]: pushPast(s.history[board.id], board) },
+        ...withBoard(s, next),
+        history: { ...s.history, [board.id]: pushPast(s.history[board.id], { board }) },
         // A commit inside a gesture (e.g. renaming while a note is open) closes the
         // current step; later live updates of the same gesture form a new one.
         gesture: s.gesture ? { base: next, pushed: false } : null,
       };
     }),
+
+  commitTo: (boardId, next, label) => {
+    set((s) => {
+      const board = s.workspace.boards[boardId];
+      if (!board || next === board) return s;
+      const present = new Set(next.items.map((i) => i.id));
+      return {
+        ...withBoard(s, next),
+        history: { ...s.history, [boardId]: pushPast(s.history[boardId], { board, label }) },
+        // An outside change ends any local gesture on that board so steps never merge.
+        gesture: boardId === s.activeBoardId ? null : s.gesture,
+        selectedIds:
+          boardId === s.activeBoardId
+            ? s.selectedIds.filter((id) => present.has(id))
+            : s.selectedIds,
+      };
+    });
+    return get().revisions[boardId] ?? 0;
+  },
 
   beginGesture: () => {
     const board = get().workspace.boards[get().activeBoardId];
@@ -129,39 +205,23 @@ export const useBoardStore = create<BoardState>()((set, get) => ({
       if (!board) return s;
       const next = mutate(board);
       if (next === board) return s;
-      const patch: Partial<BoardState> = {
-        workspace: { ...s.workspace, boards: { ...s.workspace.boards, [board.id]: next } },
-      };
+      const patch: Partial<BoardState> = withBoard(s, next);
       if (!s.gesture) {
         // Live change without a gesture (e.g. arrow-key nudges): its own undo step.
-        patch.history = { ...s.history, [board.id]: pushPast(s.history[board.id], board) };
+        patch.history = { ...s.history, [board.id]: pushPast(s.history[board.id], { board }) };
       } else if (!s.gesture.pushed) {
-        patch.history = { ...s.history, [board.id]: pushPast(s.history[board.id], s.gesture.base) };
+        patch.history = {
+          ...s.history,
+          [board.id]: pushPast(s.history[board.id], { board: s.gesture.base }),
+        };
         patch.gesture = { ...s.gesture, pushed: true };
       }
       return patch;
     }),
   endGesture: () => set({ gesture: null }),
 
-  undo: () =>
-    set((s) => {
-      const id = s.activeBoardId;
-      const history = s.history[id];
-      const previous = history?.past.at(-1);
-      if (!history || !previous) return s;
-      return {
-        workspace: { ...s.workspace, boards: { ...s.workspace.boards, [id]: previous } },
-        history: {
-          ...s.history,
-          [id]: {
-            past: history.past.slice(0, -1),
-            future: [s.workspace.boards[id], ...history.future],
-          },
-        },
-        selectedIds: [],
-        gesture: null,
-      };
-    }),
+  undo: () => set((s) => undoOn(s, s.activeBoardId)),
+  undoBoard: (boardId) => set((s) => undoOn(s, boardId)),
   redo: () =>
     set((s) => {
       const id = s.activeBoardId;
@@ -169,11 +229,11 @@ export const useBoardStore = create<BoardState>()((set, get) => ({
       const next = history?.future[0];
       if (!history || !next) return s;
       return {
-        workspace: { ...s.workspace, boards: { ...s.workspace.boards, [id]: next } },
+        ...withBoard(s, next.board),
         history: {
           ...s.history,
           [id]: {
-            past: [...history.past, s.workspace.boards[id]],
+            past: [...history.past, { board: s.workspace.boards[id], label: next.label }],
             future: history.future.slice(1),
           },
         },
@@ -186,18 +246,22 @@ export const useBoardStore = create<BoardState>()((set, get) => ({
     const first =
       workspace.manifest.boards.find((b) => b.title.startsWith("Akış")) ??
       workspace.manifest.boards[0];
-    set({
+    set((s) => ({
       workspace,
       activeBoardId: first?.id ?? "",
       history: Object.fromEntries(Object.keys(workspace.boards).map((id) => [id, emptyHistory()])),
+      // Keep counting up across loads so an AI holding an old revision is always rejected.
+      revisions: Object.fromEntries(
+        Object.keys(workspace.boards).map((id) => [id, (s.revisions[id] ?? 0) + 1]),
+      ),
       gesture: null,
       selectedIds: [],
       origin,
       savedWorkspace: saved ? workspace : null,
-    });
+    }));
   },
   markSaved: (origin, written) => set({ origin, savedWorkspace: written }),
-  showToast: (text, tone = "ok") => set({ toast: { id: Date.now(), text, tone } }),
+  showToast: (text, tone = "ok", action) => set({ toast: { id: Date.now(), text, tone, action } }),
 }));
 
 export function useActiveBoard(): BoardDoc | undefined {
