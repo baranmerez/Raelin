@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="120" viewBox="0 0 1200 120" role="img" aria-label="8 MCP tools · 1 file per workspace · 0 accounts or cloud · 1 undo step per AI change">
+<title>8 MCP tools · 1 file per workspace · 0 accounts or cloud · 1 undo step per AI change</title>
+<style>
+text { font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif; }
+.tile { animation: rise .7s cubic-bezier(.2,.9,.3,1.2) both; }
+@keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.shine { animation: shine 7s ease-in-out infinite; }
+@keyframes shine { 0%, 20% { transform: translateX(-300px); } 70%, 100% { transform: translateX(1300px); } }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; } .tile { opacity: 1; } .shine { display: none; } }
+</style>
+<defs>
+  <linearGradient id="glint" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".5" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+  <clipPath id="tiles"><rect x="0" y="10" width="1200" height="100" rx="18"/></clipPath>
+</defs>
+<g class="tile" style="animation-delay:.05s">
+  <rect x="2" y="10" width="285" height="100" rx="18" fill="#efe6fb" stroke="#b79be6"/>
+  <text x="30" y="68" font-size="42" font-weight="800" fill="#5b3a9e">8</text>
+  <text x="70" y="56" font-size="17" font-weight="700" fill="#3b2a63">MCP tools</text>
+  <text x="70" y="80" font-size="14" fill="#6c6478">read, search, edit, lay out</text>
+</g>
+<g class="tile" style="animation-delay:.2s">
+  <rect x="305" y="10" width="285" height="100" rx="18" fill="#fde4dc" stroke="#ec8f7a"/>
+  <text x="333" y="68" font-size="42" font-weight="800" fill="#e06a50">1</text>
+  <text x="373" y="56" font-size="17" font-weight="700" fill="#5e2a1f">file per workspace</text>
+  <text x="373" y="80" font-size="14" fill="#6c6478">.rli · boards and pictures</text>
+</g>
+<g class="tile" style="animation-delay:.35s">
+  <rect x="608" y="10" width="285" height="100" rx="18" fill="#dfecd6" stroke="#8fb27e"/>
+  <text x="636" y="68" font-size="42" font-weight="800" fill="#4f7a3e">0</text>
+  <text x="676" y="56" font-size="17" font-weight="700" fill="#2c4521">accounts, 0 cloud</text>
+  <text x="676" y="80" font-size="14" fill="#6c6478">your files stay on your disk</text>
+</g>
+<g class="tile" style="animation-delay:.5s">
+  <rect x="911" y="10" width="287" height="100" rx="18" fill="#fdf1c9" stroke="#e2c164"/>
+  <text x="939" y="68" font-size="42" font-weight="800" fill="#b38a1f">1</text>
+  <text x="979" y="56" font-size="17" font-weight="700" fill="#5c4a12">undo per AI change</text>
+  <text x="979" y="80" font-size="14" fill="#6c6478">Ctrl+Z takes it back</text>
+</g>
+<g clip-path="url(#tiles)"><rect class="shine" x="0" y="10" width="160" height="100" fill="url(#glint)"/></g>
+</svg>

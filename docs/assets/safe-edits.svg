@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="360" viewBox="0 0 1200 360" role="img" aria-label="Five checks between an AI client and your board: same-user pipe with a per-launch token, a typed and atomic batch, the revision check, your OK for deletes, and one undo step per change">
+<title>Five checks between an AI client and your board</title>
+<style>
+text { font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif; }
+.mono { font-family: "Cascadia Code", "Consolas", ui-monospace, monospace; }
+.layer { animation: in .6s cubic-bezier(.2,.9,.3,1.2) both; }
+@keyframes in { from { opacity: 0; transform: translateX(-14px); } to { opacity: 1; transform: none; } }
+.tick { stroke-dasharray: 24; }
+.t1 { animation: t1 8s infinite; } @keyframes t1 { 0%, 8% { stroke-dashoffset: 24; } 12%, 92% { stroke-dashoffset: 0; } 100% { stroke-dashoffset: 24; } }
+.t2 { animation: t2 8s infinite; } @keyframes t2 { 0%, 22% { stroke-dashoffset: 24; } 26%, 92% { stroke-dashoffset: 0; } 100% { stroke-dashoffset: 24; } }
+.t3 { animation: t3 8s infinite; } @keyframes t3 { 0%, 36% { stroke-dashoffset: 24; } 40%, 92% { stroke-dashoffset: 0; } 100% { stroke-dashoffset: 24; } }
+.t4 { animation: t4 8s infinite; } @keyframes t4 { 0%, 50% { stroke-dashoffset: 24; } 54%, 92% { stroke-dashoffset: 0; } 100% { stroke-dashoffset: 24; } }
+.t5 { animation: t5 8s infinite; } @keyframes t5 { 0%, 64% { stroke-dashoffset: 24; } 68%, 92% { stroke-dashoffset: 0; } 100% { stroke-dashoffset: 24; } }
+.batch { animation: batch 8s cubic-bezier(.4,0,.2,1) infinite; }
+@keyframes batch { 0% { transform: translateY(0); opacity: 0; } 4% { opacity: 1; } 72% { transform: translateY(290px); opacity: 1; } 80%, 100% { transform: translateY(290px); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; } .layer { opacity: 1; } .t1, .t2, .t3, .t4, .t5 { stroke-dashoffset: 0; } .batch { display: none; } }
+</style>
+<rect x="1" y="1" width="1198" height="358" rx="22" fill="#fbf8f4" stroke="#ece4da" stroke-width="2"/>
+
+<!-- the batch travelling down -->
+<line x1="88" y1="30" x2="88" y2="330" stroke="#e2d6f5" stroke-width="3" stroke-dasharray="2 8" stroke-linecap="round"/>
+<g class="batch"><rect x="66" y="22" width="44" height="26" rx="8" fill="#5b3a9e"/><text class="mono" x="88" y="40" font-size="12" text-anchor="middle" fill="#fff">ops</text></g>
+
+<g font-size="15">
+  <g class="layer" style="animation-delay:.05s">
+    <rect x="130" y="24" width="1040" height="52" rx="14" fill="#dfecd6" stroke="#8fb27e"/>
+    <text x="154" y="56" font-size="17" font-weight="750" fill="#2c4521">1 · Same-user pipe</text>
+    <text x="420" y="56" fill="#3d5a30">The bridge only talks to a Raelin run by your Windows user, with this launch's token.</text>
+    <path class="tick t1" d="M1132 50 l7 7 l13 -15" fill="none" stroke="#4f7a3e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <g class="layer" style="animation-delay:.2s">
+    <rect x="130" y="86" width="1040" height="52" rx="14" fill="#e3e8fb" stroke="#8c9ad9"/>
+    <text x="154" y="118" font-size="17" font-weight="750" fill="#26305e">2 · Typed, atomic batch</text>
+    <text x="420" y="118" fill="#3b4479">Every op is schema-checked; the whole batch applies, or nothing does.</text>
+    <path class="tick t2" d="M1132 112 l7 7 l13 -15" fill="none" stroke="#5463b5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <g class="layer" style="animation-delay:.35s">
+    <rect x="130" y="148" width="1040" height="52" rx="14" fill="#efe6fb" stroke="#b79be6"/>
+    <text x="154" y="180" font-size="17" font-weight="750" fill="#3b2a63">3 · Revision check</text>
+    <text x="420" y="180" fill="#4e3c78">A write names the revision it read; if you changed the board since, it is refused.</text>
+    <path class="tick t3" d="M1132 174 l7 7 l13 -15" fill="none" stroke="#7a56c2" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <g class="layer" style="animation-delay:.5s">
+    <rect x="130" y="210" width="1040" height="52" rx="14" fill="#fde4dc" stroke="#ec8f7a"/>
+    <text x="154" y="242" font-size="17" font-weight="750" fill="#5e2a1f">4 · You OK deletes</text>
+    <text x="420" y="242" fill="#6e3a2e">Deleting, or moving or re-laying-out many items, waits for your answer in a dialog.</text>
+    <path class="tick t4" d="M1132 236 l7 7 l13 -15" fill="none" stroke="#d0603f" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <g class="layer" style="animation-delay:.65s">
+    <rect x="130" y="272" width="1040" height="52" rx="14" fill="#fdf1c9" stroke="#e2c164"/>
+    <text x="154" y="304" font-size="17" font-weight="750" fill="#5c4a12">5 · One undo step</text>
+    <text x="420" y="304" fill="#6b5718">Each AI change is a labelled step with an Undo toast; Ctrl+Z works as always.</text>
+    <path class="tick t5" d="M1132 298 l7 7 l13 -15" fill="none" stroke="#b38a1f" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</g>
+</svg>

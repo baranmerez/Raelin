@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="470" viewBox="0 0 1200 470" role="img" aria-label="You ask the agent to sketch a signup flow; it reads the overview and the region, applies one batch of changes, tidies the region with layout, and the board shows the new steps with an undo button">
+<title>Example session: an AI client sketches a flow on your board</title>
+<style>
+text { font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif; }
+.mono { font-family: "Cascadia Code", "Consolas", ui-monospace, monospace; }
+.hand { font-family: "Segoe Print", "Ink Free", "Bradley Hand", "Comic Sans MS", cursive; }
+/* 14 s loop: ask, four tool calls, answer; the board follows the calls. */
+.s0 { animation: s0 14s infinite; } @keyframes s0 { 0%, 2% { opacity: 0; transform: translateY(8px); } 5%, 93% { opacity: 1; transform: none; } 98%, 100% { opacity: 0; } }
+.s1 { animation: s1 14s infinite; } @keyframes s1 { 0%, 12% { opacity: 0; transform: translateY(8px); } 15%, 93% { opacity: 1; transform: none; } 98%, 100% { opacity: 0; } }
+.s2 { animation: s2 14s infinite; } @keyframes s2 { 0%, 22% { opacity: 0; transform: translateY(8px); } 25%, 93% { opacity: 1; transform: none; } 98%, 100% { opacity: 0; } }
+.s3 { animation: s3 14s infinite; } @keyframes s3 { 0%, 34% { opacity: 0; transform: translateY(8px); } 37%, 93% { opacity: 1; transform: none; } 98%, 100% { opacity: 0; } }
+.s4 { animation: s4 14s infinite; } @keyframes s4 { 0%, 56% { opacity: 0; transform: translateY(8px); } 59%, 93% { opacity: 1; transform: none; } 98%, 100% { opacity: 0; } }
+.s5 { animation: s5 14s infinite; } @keyframes s5 { 0%, 72% { opacity: 0; transform: translateY(8px); } 75%, 93% { opacity: 1; transform: none; } 98%, 100% { opacity: 0; } }
+/* Board: steps land roughly after apply_changes, then layout tidies them into a column. */
+.b { animation: b 14s infinite; } @keyframes b { 0%, 37% { opacity: 0; } 40%, 93% { opacity: 1; } 98%, 100% { opacity: 0; } }
+.m1 { animation: m1 14s cubic-bezier(.3,0,.2,1) infinite; } @keyframes m1 { 0%, 57% { transform: translate(-40px, 6px); } 64%, 100% { transform: none; } }
+.m2 { animation: m2 14s cubic-bezier(.3,0,.2,1) infinite; } @keyframes m2 { 0%, 57% { transform: translate(52px, -10px); } 64%, 100% { transform: none; } }
+.m3 { animation: m3 14s cubic-bezier(.3,0,.2,1) infinite; } @keyframes m3 { 0%, 57% { transform: translate(-30px, 14px); } 64%, 100% { transform: none; } }
+.m4 { animation: m4 14s cubic-bezier(.3,0,.2,1) infinite; } @keyframes m4 { 0%, 57% { transform: translate(44px, 8px); } 64%, 100% { transform: none; } }
+.wire { animation: wire 14s infinite; } @keyframes wire { 0%, 62% { opacity: 0; } 66%, 93% { opacity: 1; } 98%, 100% { opacity: 0; } }
+.toast { animation: toast 14s infinite; } @keyframes toast { 0%, 40% { opacity: 0; transform: translateY(8px); } 43%, 90% { opacity: 1; transform: none; } 95%, 100% { opacity: 0; } }
+.spin { transform-box: fill-box; transform-origin: center; animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; }
+  .s0, .s1, .s2, .s3, .s4, .s5, .b, .wire, .toast { opacity: 1; }
+}
+</style>
+<defs>
+  <filter id="soft" x="-20%" y="-20%" width="140%" height="160%"><feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#46306e" flood-opacity=".14"/></filter>
+  <pattern id="dots" width="22" height="22" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1.3" fill="#ddd2c6"/></pattern>
+  <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#5b3a9e"/></marker>
+</defs>
+
+<rect x="1" y="1" width="1198" height="468" rx="22" fill="#fbf8f4" stroke="#ece4da" stroke-width="2"/>
+
+<!-- Conversation -->
+<text x="40" y="44" font-size="14" font-weight="700" fill="#a49cae" letter-spacing="1.2">YOUR AI CLIENT</text>
+<g class="s0">
+  <rect x="40" y="62" width="520" height="62" rx="16" fill="#fde6de" stroke="#f5b5a4"/>
+  <text x="62" y="88" font-size="15.5" fill="#5e2a1f">Sketch the signup flow inside the “Flow” region:</text>
+  <text x="62" y="110" font-size="15.5" fill="#5e2a1f">email, a validity check, account, and an error path.</text>
+</g>
+<g font-size="13.5" class="mono">
+  <g class="s1"><rect x="40" y="140" width="520" height="40" rx="12" fill="#fff" stroke="#ece4da"/><text x="60" y="165" fill="#5b3a9e">get_overview</text><text x="200" y="165" fill="#6c6478">→ 3 boards · “Flow” region found</text></g>
+  <g class="s2"><rect x="40" y="190" width="520" height="40" rx="12" fill="#fff" stroke="#ece4da"/><text x="60" y="215" fill="#5b3a9e">read_board</text><text x="200" y="215" fill="#6c6478">regionId · revision 7 · 1 step</text></g>
+  <g class="s3"><rect x="40" y="240" width="520" height="40" rx="12" fill="#fff" stroke="#ece4da"/><text x="60" y="265" fill="#5b3a9e">apply_changes</text><text x="200" y="265" fill="#6c6478">9 ops, expectedRevision 7 → 8</text></g>
+  <g class="s4"><rect x="40" y="290" width="520" height="40" rx="12" fill="#fff" stroke="#ece4da"/><text x="60" y="315" fill="#5b3a9e">layout</text><text x="200" y="315" fill="#6c6478">region “Flow”, top-down → 5 moved</text></g>
+</g>
+<g class="s5">
+  <rect x="40" y="346" width="520" height="62" rx="16" fill="#efe6fb" stroke="#c9b2ef"/>
+  <text x="62" y="372" font-size="15.5" fill="#3b2a63">Done: four steps and an error branch in “Flow”.</text>
+  <text x="62" y="394" font-size="15.5" fill="#3b2a63">Each batch is one undo step if you want it back.</text>
+</g>
+<text x="40" y="440" font-size="13" fill="#a49cae">Reads are compact; writes name the revision they read, so a stale batch is refused.</text>
+
+<!-- Board -->
+<g filter="url(#soft)"><rect x="600" y="30" width="570" height="410" rx="18" fill="#fbf8f4" stroke="#ece4da"/></g>
+<rect x="600" y="30" width="570" height="410" rx="18" fill="url(#dots)" opacity=".8"/>
+<rect x="624" y="52" width="522" height="366" rx="26" fill="#e2d0fa" fill-opacity=".42" stroke="#c9b2ef" stroke-opacity=".7"/>
+<text class="hand" x="648" y="88" font-size="22" fill="#5b3a9e">Flow</text>
+<path d="M648 96C668 92 692 91 712 93" fill="none" stroke="#b79be6" stroke-width="2.2" stroke-linecap="round"/>
+
+<g font-size="14" text-anchor="middle">
+  <g><rect x="830" y="84" width="160" height="38" rx="19" fill="#dfecd6" stroke="#8fb27e" stroke-width="1.5"/><text x="910" y="108" fill="#2c4521">Start</text></g>
+  <g class="b"><g class="m1"><rect x="830" y="152" width="160" height="40" rx="9" fill="#e3e8fb" stroke="#8c9ad9" stroke-width="1.5"/><text x="910" y="177" fill="#26305e">Enter email</text></g></g>
+  <g class="b"><g class="m2"><path d="M910 220 L956 258 L910 296 L864 258 Z" fill="#fde4dc" stroke="#ec8f7a" stroke-width="1.5"/><text x="910" y="263" fill="#5e2a1f">Valid?</text></g></g>
+  <g class="b"><g class="m3"><rect x="830" y="326" width="160" height="40" rx="9" fill="#e3e8fb" stroke="#8c9ad9" stroke-width="1.5"/><text x="910" y="351" fill="#26305e">Create account</text></g></g>
+  <g class="b"><g class="m4"><rect x="660" y="238" width="140" height="40" rx="9" fill="#e3e8fb" stroke="#8c9ad9" stroke-width="1.5"/><text x="730" y="263" fill="#26305e">Show error</text></g></g>
+</g>
+<g class="wire" fill="none" stroke="#5b3a9e" stroke-width="1.8" marker-end="url(#arrow)">
+  <path d="M910 122 V150"/><path d="M910 192 V218"/><path d="M910 296 V324"/><path d="M864 258 H802"/>
+  <path d="M730 238 V172 H828"/>
+</g>
+<g class="wire" font-size="12" font-style="italic" fill="#5b3a9e"><text x="834" y="250" text-anchor="middle">No</text><text x="920" y="314">Yes</text></g>
+
+<g class="toast" filter="url(#soft)">
+  <rect x="770" y="380" width="360" height="32" rx="16" fill="#2e2838"/>
+  <circle cx="790" cy="396" r="4" fill="#8fd18a"/>
+  <text x="802" y="401" font-size="13.5" fill="#fff">Claude Code made 9 changes</text>
+  <text x="1110" y="401" font-size="13.5" font-weight="700" text-anchor="end" fill="#f5b5a4">Undo</text>
+</g>
+</svg>

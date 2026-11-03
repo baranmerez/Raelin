@@ -1,0 +1,112 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="420" viewBox="0 0 1200 420" role="img" aria-label="Raelin — a free-form canvas for ideas, notes and flows that your AI can edit too">
+<title>Raelin — a free-form canvas for ideas, notes and flows that your AI can edit too</title>
+<style>
+text { font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif; }
+.hand { font-family: "Segoe Print", "Ink Free", "Bradley Hand", "Comic Sans MS", cursive; }
+.breathe { transform-box: fill-box; transform-origin: center; animation: breathe 6s cubic-bezier(.2,.8,.2,1) infinite; }
+@keyframes breathe { 50% { transform: translate(3px, -2px) scale(1.06); } }
+.pill { animation: pill .7s cubic-bezier(.2,.9,.3,1.3) both; }
+@keyframes pill { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+/* One 12 s story on the mini canvas: the AI places five steps, wires them, tidies up. */
+.n1 { animation: n1 12s infinite; } @keyframes n1 { 0%, 8% { opacity: 0; transform: translateY(6px); } 11%, 92% { opacity: 1; transform: none; } 97%, 100% { opacity: 0; } }
+.n2 { animation: n2 12s infinite; } @keyframes n2 { 0%, 20% { opacity: 0; transform: translateY(6px); } 23%, 92% { opacity: 1; transform: none; } 97%, 100% { opacity: 0; } }
+.n3 { animation: n3 12s infinite; } @keyframes n3 { 0%, 32% { opacity: 0; transform: translateY(6px); } 35%, 92% { opacity: 1; transform: none; } 97%, 100% { opacity: 0; } }
+.n4 { animation: n4 12s infinite; } @keyframes n4 { 0%, 44% { opacity: 0; transform: translateY(6px); } 47%, 92% { opacity: 1; transform: none; } 97%, 100% { opacity: 0; } }
+.n5 { animation: n5 12s infinite; } @keyframes n5 { 0%, 56% { opacity: 0; transform: translateX(-6px); } 59%, 92% { opacity: 1; transform: none; } 97%, 100% { opacity: 0; } }
+.e { stroke-dasharray: 80; }
+.e1 { animation: e1 12s infinite; } @keyframes e1 { 0%, 22% { stroke-dashoffset: 80; opacity: 0; } 23% { opacity: 1; } 26%, 92% { stroke-dashoffset: 0; opacity: 1; } 97%, 100% { opacity: 0; } }
+.e2 { animation: e2 12s infinite; } @keyframes e2 { 0%, 34% { stroke-dashoffset: 80; opacity: 0; } 35% { opacity: 1; } 38%, 92% { stroke-dashoffset: 0; opacity: 1; } 97%, 100% { opacity: 0; } }
+.e3 { animation: e3 12s infinite; } @keyframes e3 { 0%, 46% { stroke-dashoffset: 80; opacity: 0; } 47% { opacity: 1; } 50%, 92% { stroke-dashoffset: 0; opacity: 1; } 97%, 100% { opacity: 0; } }
+.e4 { stroke-dasharray: 160; animation: e4 12s infinite; } @keyframes e4 { 0%, 60% { stroke-dashoffset: 160; opacity: 0; } 61% { opacity: 1; } 66%, 92% { stroke-dashoffset: 0; opacity: 1; } 97%, 100% { opacity: 0; } }
+.cursor { animation: cursor 12s cubic-bezier(.5,0,.3,1) infinite; }
+@keyframes cursor {
+  0% { transform: translate(1060px, 380px); opacity: 0; }
+  4% { opacity: 1; }
+  8% { transform: translate(1010px, 128px); }
+  20% { transform: translate(1032px, 192px); }
+  32% { transform: translate(1004px, 262px); }
+  44% { transform: translate(1032px, 330px); }
+  56% { transform: translate(842px, 270px); opacity: 1; }
+  66%, 100% { transform: translate(1150px, 300px); opacity: 0; }
+}
+.toast { animation: toast 12s infinite; }
+@keyframes toast { 0%, 70% { opacity: 0; transform: translateY(10px); } 74%, 90% { opacity: 1; transform: none; } 95%, 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; }
+  .n1, .n2, .n3, .n4, .n5, .toast { opacity: 1; }
+  .e { stroke-dashoffset: 0; }
+  .cursor { opacity: 0; }
+}
+</style>
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fffaf3"/><stop offset="1" stop-color="#f4ebe1"/></linearGradient>
+  <pattern id="dots" width="22" height="22" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1.3" fill="#ddd2c6"/></pattern>
+  <radialGradient id="lilac" cx=".35" cy=".32" r=".75"><stop offset="0" stop-color="#e6dafd"/><stop offset="1" stop-color="#a988e0"/></radialGradient>
+  <radialGradient id="coral" cx=".35" cy=".32" r=".75"><stop offset="0" stop-color="#ffd9cd"/><stop offset="1" stop-color="#ec7a5f"/></radialGradient>
+  <filter id="lift" x="-20%" y="-20%" width="140%" height="160%"><feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#46306e" flood-opacity=".18"/></filter>
+  <filter id="soft" x="-20%" y="-30%" width="140%" height="180%"><feDropShadow dx="0" dy="4" stdDeviation="5" flood-color="#46306e" flood-opacity=".16"/></filter>
+  <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#5b3a9e"/></marker>
+</defs>
+
+<rect x="1" y="1" width="1198" height="418" rx="24" fill="url(#bg)" stroke="#ece4da" stroke-width="2"/>
+<rect x="1" y="1" width="1198" height="418" rx="24" fill="url(#dots)" opacity=".7"/>
+
+<!-- Brand -->
+<g transform="translate(78 92)">
+  <circle cx="34" cy="34" r="34" fill="url(#lilac)"/>
+  <circle class="breathe" cx="72" cy="34" r="34" fill="url(#coral)" style="mix-blend-mode:multiply"/>
+</g>
+<text x="190" y="152" font-size="74" font-weight="800" fill="#2e2838" letter-spacing="-1.5">Raelin</text>
+<text x="80" y="226" font-size="26" fill="#6c6478">A free-form canvas for ideas, notes and flows —</text>
+<text x="80" y="262" font-size="26" font-weight="650" fill="#5b3a9e">and your AI can edit the same board.</text>
+
+<g font-size="16" font-weight="600">
+  <g class="pill" style="animation-delay:.2s"><rect x="80" y="296" width="88" height="34" rx="17" fill="#fdf1c9" stroke="#e2c164"/><text x="124" y="318" text-anchor="middle" fill="#5c4a12">Notes</text></g>
+  <g class="pill" style="animation-delay:.35s"><rect x="178" y="296" width="84" height="34" rx="17" fill="#e3e8fb" stroke="#8c9ad9"/><text x="220" y="318" text-anchor="middle" fill="#26305e">Flows</text></g>
+  <g class="pill" style="animation-delay:.5s"><rect x="272" y="296" width="100" height="34" rx="17" fill="#efe6fb" stroke="#b79be6"/><text x="322" y="318" text-anchor="middle" fill="#3b2a63">Regions</text></g>
+  <g class="pill" style="animation-delay:.65s"><rect x="382" y="296" width="70" height="34" rx="17" fill="#dfecd6" stroke="#8fb27e"/><text x="417" y="318" text-anchor="middle" fill="#2c4521">Pen</text></g>
+  <g class="pill" style="animation-delay:.8s"><rect x="462" y="296" width="96" height="34" rx="17" fill="#fde4dc" stroke="#ec8f7a"/><text x="510" y="318" text-anchor="middle" fill="#5e2a1f">Pictures</text></g>
+  <g class="pill" style="animation-delay:.95s"><rect x="568" y="296" width="74" height="34" rx="17" fill="#5b3a9e"/><text x="605" y="318" text-anchor="middle" fill="#ffffff">MCP</text></g>
+</g>
+<text x="80" y="370" font-size="15" fill="#a49cae">Windows desktop app · one .rli file per workspace · MIT</text>
+
+<!-- Mini canvas -->
+<g filter="url(#lift)">
+  <rect x="700" y="40" width="460" height="336" rx="20" fill="#fbf8f4" stroke="#ece4da"/>
+</g>
+<rect x="700" y="40" width="460" height="336" rx="20" fill="url(#dots)" opacity=".8"/>
+<rect x="722" y="60" width="416" height="296" rx="26" fill="#e2d0fa" fill-opacity=".42" stroke="#c9b2ef" stroke-opacity=".7"/>
+<text class="hand" x="744" y="96" font-size="22" fill="#5b3a9e">Signup</text>
+<path d="M744 104C770 99 800 98 826 101" fill="none" stroke="#b79be6" stroke-width="2.2" stroke-linecap="round"/>
+
+<g font-size="14" text-anchor="middle">
+  <g class="n1"><rect x="930" y="84" width="150" height="36" rx="18" fill="#dfecd6" stroke="#8fb27e" stroke-width="1.5"/><text x="1005" y="107" fill="#2c4521">Start</text></g>
+  <g class="n2"><rect x="930" y="148" width="150" height="38" rx="9" fill="#e3e8fb" stroke="#8c9ad9" stroke-width="1.5"/><text x="1005" y="172" fill="#26305e">Enter email</text></g>
+  <g class="n3"><path d="M1005 212 L1048 248 L1005 284 L962 248 Z" fill="#fde4dc" stroke="#ec8f7a" stroke-width="1.5"/><text x="1005" y="253" fill="#5e2a1f">Valid?</text></g>
+  <g class="n4"><rect x="930" y="306" width="150" height="38" rx="9" fill="#e3e8fb" stroke="#8c9ad9" stroke-width="1.5"/><text x="1005" y="330" fill="#26305e">Create account</text></g>
+  <g class="n5"><rect x="758" y="229" width="132" height="38" rx="9" fill="#e3e8fb" stroke="#8c9ad9" stroke-width="1.5"/><text x="824" y="253" fill="#26305e">Show error</text></g>
+</g>
+<g fill="none" stroke="#5b3a9e" stroke-width="1.8" marker-end="url(#arrow)">
+  <path class="e e1" d="M1005 120 V146"/>
+  <path class="e e2" d="M1005 186 V210"/>
+  <path class="e e3" d="M1005 284 V304"/>
+  <path class="e e4" d="M962 248 H892"/>
+</g>
+<g class="n5" font-size="12" font-style="italic" fill="#5b3a9e"><text x="912" y="241" text-anchor="middle">No</text></g>
+<g class="n4" font-size="12" font-style="italic" fill="#5b3a9e"><text x="1022" y="298">Yes</text></g>
+
+<!-- AI cursor -->
+<g class="cursor">
+  <path d="M0 0 L0 20 L5.5 15 L9.5 24 L13 22.5 L9 13.8 L16 13.8 Z" fill="#2e2838" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/>
+  <rect x="14" y="20" width="104" height="24" rx="12" fill="#5b3a9e"/>
+  <text x="66" y="37" font-size="12.5" font-weight="650" text-anchor="middle" fill="#fff">Claude Code</text>
+</g>
+
+<!-- Undo toast -->
+<g class="toast" filter="url(#soft)">
+  <rect x="760" y="382" width="340" height="30" rx="15" fill="#2e2838"/>
+  <circle cx="780" cy="397" r="4" fill="#8fd18a"/>
+  <text x="792" y="402" font-size="13.5" fill="#fff">Claude Code made 9 changes</text>
+  <text x="1080" y="402" font-size="13.5" font-weight="700" text-anchor="end" fill="#f5b5a4">Undo</text>
+</g>
+</svg>

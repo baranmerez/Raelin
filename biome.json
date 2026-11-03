@@ -1,7 +1,16 @@
 {
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
   "files": {
-    "includes": ["**", "!dist", "!target", "!src-tauri/target", "!src-tauri/gen", "!node_modules"]
+    "includes": [
+      "**",
+      "!dist",
+      "!target",
+      "!src-tauri/target",
+      "!src-tauri/gen",
+      "!node_modules",
+      "!**/*.md",
+      "!docs/assets"
+    ]
   },
   "formatter": {
     "indentStyle": "space",
@@ -11,10 +20,14 @@
   "linter": {
     "rules": {
       "preset": "recommended",
-      "style": { "noDescendingSpecificity": "off" }
+      "style": {
+        "noDescendingSpecificity": "off"
+      }
     }
   },
   "javascript": {
-    "formatter": { "quoteStyle": "double" }
+    "formatter": {
+      "quoteStyle": "double"
+    }
   }
 }

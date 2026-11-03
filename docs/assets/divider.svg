@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="28" viewBox="0 0 1200 28" role="presentation" aria-hidden="true">
+<style>
+.ink { stroke-dasharray: 1400; stroke-dashoffset: 1400; animation: draw 3.5s cubic-bezier(.4,0,.2,1) forwards; }
+@keyframes draw { to { stroke-dashoffset: 0; } }
+.dot { animation: bob 4s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes bob { 50% { transform: translateY(-3px); } }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; } .ink { stroke-dashoffset: 0; } }
+</style>
+<path class="ink" d="M40 16 C180 6 300 24 450 14 S720 6 860 16 S1080 22 1160 12" fill="none" stroke="#c9b2ef" stroke-width="2.4" stroke-linecap="round"/>
+<circle class="dot" cx="586" cy="12" r="5" fill="#b79be6"/>
+<circle class="dot" cx="602" cy="12" r="5" fill="#ef8268" style="animation-delay:.4s;mix-blend-mode:multiply"/>
+</svg>
