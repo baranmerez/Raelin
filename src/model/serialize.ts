@@ -186,7 +186,7 @@ function isDocNode(node: unknown, depth = 0): boolean {
     marks?: unknown;
     content?: unknown;
   };
-  if (!isStr(n.type) || !isOptStr(n.text)) return false;
+  if (!isStr(n.type) || !isOptStr(n.text) || n.text === "") return false;
   if (
     n.attrs !== undefined &&
     (!n.attrs || typeof n.attrs !== "object" || Array.isArray(n.attrs))

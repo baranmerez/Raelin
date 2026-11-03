@@ -72,11 +72,14 @@ function replaceInDoc(doc: JSONContent, pattern: RegExp, replace: string) {
     }
     if (!node.content) return node;
     let touched = false;
-    const content = node.content.map((child) => {
-      const next = walk(child);
-      if (next !== child) touched = true;
-      return next;
-    });
+    const content = node.content
+      .map((child) => {
+        const next = walk(child);
+        if (next !== child) touched = true;
+        return next;
+      })
+      // ProseMirror rejects empty text nodes and would load the whole note as empty.
+      .filter((child) => !(child.type === "text" && child.text === ""));
     return touched ? { ...node, content } : node;
   };
   const next = walk(doc);
@@ -84,8 +87,9 @@ function replaceInDoc(doc: JSONContent, pattern: RegExp, replace: string) {
 }
 
 /**
- * Finds text in step labels, note titles and bodies, region titles, edge labels and image
- * alt texts and replaces it, as one pure transformation of the board.
+ * Finds text in step labels, note titles and bodies, region titles, edge labels, image alt
+ * texts, free text, checklist entries, link cards and table cards and replaces it, as one
+ * pure transformation of the board.
  */
 export function findReplace(board: BoardDoc, options: FindReplaceOptions): FindReplaceResult {
   if (!options.find) throw new CommandError("INVALID", "Aranacak metin boş.");

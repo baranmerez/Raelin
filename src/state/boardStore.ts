@@ -26,6 +26,8 @@ export interface Step {
   label?: string;
   /** Epoch ms of the change; kept when the step moves between undo and redo. */
   at: number;
+  /** Steps of one action that changed several boards; they undo and redo together. */
+  group?: string;
 }
 
 export interface History {
@@ -85,7 +87,7 @@ interface BoardState {
   /** One undoable step on the active board. Return the same board to signal "no change". */
   commit: (mutate: (board: BoardDoc) => BoardDoc) => void;
   /** One undoable step on any board, already validated by the command layer. */
-  commitTo: (boardId: string, next: BoardDoc, label?: string) => number;
+  commitTo: (boardId: string, next: BoardDoc, label?: string, group?: string) => number;
   /** Drag/resize/typing: many live updates that undo as one step. */
   beginGesture: () => void;
   live: (mutate: (board: BoardDoc) => BoardDoc) => void;
@@ -136,6 +138,46 @@ function undoOn(s: State, id: string): Partial<State> | State {
     gesture: null,
   };
 }
+
+function redoOn(s: State, id: string): Partial<State> | State {
+  const history = s.history[id];
+  const next = history?.future[0];
+  if (!history || !next) return s;
+  return {
+    ...withBoard(s, next.board),
+    history: {
+      ...s.history,
+      [id]: {
+        past: [...history.past, { ...next, board: s.workspace.boards[id] }],
+        future: history.future.slice(1),
+      },
+    },
+    selectedIds: id === s.activeBoardId ? [] : s.selectedIds,
+    gesture: null,
+  };
+}
+
+/**
+ * Undo or redo on one board, together with the other boards whose next step belongs to
+ * the same action (e.g. an AI move from one board to another).
+ */
+function inGroup(
+  s: State,
+  id: string,
+  pick: (history: History) => Step | undefined,
+  apply: (state: State, boardId: string) => Partial<State> | State,
+): Partial<State> | State {
+  const step = s.history[id] && pick(s.history[id]);
+  const boards = step?.group
+    ? Object.keys(s.history).filter((b) => pick(s.history[b])?.group === step.group)
+    : [id];
+  let state = s;
+  for (const boardId of boards) state = { ...state, ...apply(state, boardId) };
+  return state;
+}
+
+const undoGroup = (s: State, id: string) => inGroup(s, id, (h) => h.past.at(-1), undoOn);
+const redoGroup = (s: State, id: string) => inGroup(s, id, (h) => h.future[0], redoOn);
 
 export const useBoardStore = create<BoardState>()((set, get) => ({
   workspace: { manifest: { formatVersion: 1, title: "", boards: [] }, boards: {} },
@@ -277,14 +319,17 @@ export const useBoardStore = create<BoardState>()((set, get) => ({
       };
     }),
 
-  commitTo: (boardId, next, label) => {
+  commitTo: (boardId, next, label, group) => {
     set((s) => {
       const board = s.workspace.boards[boardId];
       if (!board || next === board) return s;
       const present = new Set(next.items.map((i) => i.id));
       return {
         ...withBoard(s, next),
-        history: { ...s.history, [boardId]: pushPast(s.history[boardId], { board, label }) },
+        history: {
+          ...s.history,
+          [boardId]: pushPast(s.history[boardId], { board, label, group }),
+        },
         // An outside change closes the current local step; the rest of the same drag or
         // typing session forms one new step instead of one per frame.
         gesture:
@@ -323,27 +368,9 @@ export const useBoardStore = create<BoardState>()((set, get) => ({
     }),
   endGesture: () => set({ gesture: null }),
 
-  undo: () => set((s) => undoOn(s, s.activeBoardId)),
-  undoBoard: (boardId) => set((s) => undoOn(s, boardId)),
-  redo: () =>
-    set((s) => {
-      const id = s.activeBoardId;
-      const history = s.history[id];
-      const next = history?.future[0];
-      if (!history || !next) return s;
-      return {
-        ...withBoard(s, next.board),
-        history: {
-          ...s.history,
-          [id]: {
-            past: [...history.past, { ...next, board: s.workspace.boards[id] }],
-            future: history.future.slice(1),
-          },
-        },
-        selectedIds: [],
-        gesture: null,
-      };
-    }),
+  undo: () => set((s) => undoGroup(s, s.activeBoardId)),
+  undoBoard: (boardId) => set((s) => undoGroup(s, boardId)),
+  redo: () => set((s) => redoGroup(s, s.activeBoardId)),
 
   loadWorkspace: (workspace, origin, saved) => {
     const first =

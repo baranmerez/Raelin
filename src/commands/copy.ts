@@ -82,8 +82,11 @@ export function copyItems(
   const spot = exact ? start : freeSpot(start, obstacles(target));
 
   const clones = cloneItems(picked, Math.round(spot.x - group.x), Math.round(spot.y - group.y));
-  // cloneItems keeps order: the nodes first, then the edges whose ends were copied.
-  const edges = picked.filter((i) => !isNodeItem(i));
+  // cloneItems keeps order: the nodes first, then the edges whose two ends were copied.
+  const nodeIds = new Set(nodes.map((n) => n.id));
+  const edges = picked.filter(
+    (i) => i.kind === "edge" && nodeIds.has(i.source) && nodeIds.has(i.target),
+  );
   const map: Record<string, string> = {};
   [...nodes, ...edges].forEach((item, index) => {
     map[item.id] = clones[index].id;
@@ -105,5 +108,5 @@ export function copyItems(
     if (error instanceof FormatError) throw new CommandError("INVALID", error.message);
     throw error;
   }
-  return { board: { ...target, items }, ids: map, copied: picked.map((i) => i.id) };
+  return { board: { ...target, items }, ids: map, copied: [...nodes, ...edges].map((i) => i.id) };
 }

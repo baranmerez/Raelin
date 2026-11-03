@@ -79,6 +79,7 @@ export async function renderBoardImage(
   const paper = getComputedStyle(document.documentElement).getPropertyValue("--paper").trim();
 
   const selected = useBoardStore.getState().selectedIds;
+  const boardAtStart = useBoardStore.getState().activeBoardId;
   if (selected.length > 0) {
     useBoardStore.getState().setSelection([]);
     // Two paints so the selection outline is gone before the picture is taken.
@@ -113,7 +114,14 @@ export async function renderBoardImage(
     return kind === "png" ? await toPng(viewport, options) : await toSvg(viewport, options);
   } finally {
     const store = useBoardStore.getState();
-    if (selected.length > 0 && store.selectedIds.length === 0) store.setSelection(selected);
+    // Only onto the same board, and only if nobody selected something else meanwhile.
+    if (
+      selected.length > 0 &&
+      store.activeBoardId === boardAtStart &&
+      store.selectedIds.length === 0
+    ) {
+      store.setSelection(selected);
+    }
   }
 }
 

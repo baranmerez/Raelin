@@ -224,7 +224,15 @@ function useCloseGuard(enabled: boolean) {
         );
         if (choice === "cancel") event.preventDefault();
         else if (choice === "discard") clearRecovery();
-        else if (!(await saveNow())) event.preventDefault();
+        else if (
+          !(await saveNow()) ||
+          useBoardStore.getState().workspace !== useBoardStore.getState().savedWorkspace
+        ) {
+          // Not saved, or changed while saving (e.g. by an AI client): stay open.
+          const latest = useBoardStore.getState();
+          writeRecovery(latest.workspace, latest.origin);
+          event.preventDefault();
+        }
       })
       .then((fn) => {
         if (disposed) fn();

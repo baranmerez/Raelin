@@ -9,6 +9,7 @@ import { recentChanges } from "../commands/history";
 import { layoutBoard } from "../commands/layout";
 import { opSchema } from "../commands/schema";
 import { placeTemplate } from "../commands/template";
+import { newId } from "../model/ids";
 import { boardToMarkdown } from "../model/markdown";
 import type { BoardDoc } from "../model/types";
 import { isNodeItem } from "../model/types";
@@ -109,22 +110,26 @@ function commitFromClient(id: string, next: BoardDoc, client: string, summary: s
   return commitManyFromClient([{ id, next }], client, summary)[0];
 }
 
-/** Several boards changed by one AI action: one step each, one undo button for all. */
+/**
+ * Several boards changed by one AI action: one step per board, grouped so that Ctrl+Z on
+ * any of them (or the toast's button) undoes the whole action.
+ */
 function commitManyFromClient(
   changes: { id: string; next: BoardDoc }[],
   client: string,
   summary: string,
 ): number[] {
   const store = useBoardStore.getState();
+  const group = changes.length > 1 ? newId("g") : undefined;
   const revisions = changes.map(({ id, next }) =>
-    store.commitTo(id, next, `${client}: ${summary}`),
+    store.commitTo(id, next, `${client}: ${summary}`, group),
   );
   store.showToast(`${client} ${summary}`, "ok", {
     label: "Geri al",
     run: () => {
       const s = useBoardStore.getState();
       if (changes.every(({ id }, i) => s.revisions[id] === revisions[i])) {
-        for (const { id } of changes) s.undoBoard(id);
+        s.undoBoard(changes[0].id);
       } else s.showToast("Geri alınamadı: bu arada panoda başka değişiklik oldu.", "error");
     },
   });
@@ -538,7 +543,7 @@ export function createRaelinServer(): McpServer {
     "copy_items",
     {
       description:
-        "Copy ids (with region contents and edges among them) to another board with fresh ids. move:true also removes them from the source (asks the user; needs sourceRevision).",
+        "Copy ids (with region contents and edges among them) to another board with fresh ids. move:true also removes them from the source (asks the user; needs sourceRevision); both boards undo together.",
       inputSchema: {
         fromBoardId: z.string(),
         toBoardId: z.string(),
@@ -617,7 +622,7 @@ export function createRaelinServer(): McpServer {
     "find_replace",
     {
       description:
-        "Find/replace text in step labels, note titles/bodies, region titles, edge labels, image alt. dryRun lists matches; otherwise one atomic step (needs expectedRevision).",
+        "Find/replace text in steps, notes, regions, edge labels, image alt, free text, checklists, link and table cards. dryRun lists matches; otherwise one atomic step (needs expectedRevision).",
       inputSchema: {
         boardId: z.string().optional(),
         find: z.string().min(1).max(200),
