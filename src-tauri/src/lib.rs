@@ -42,6 +42,8 @@ pub fn run() {
             workspace::pick_workspace_open,
             workspace::pick_workspace_save,
             workspace::last_workspace_file,
+            workspace::recent_workspaces,
+            workspace::rename_workspace_file,
             workspace::launch_file,
             workspace::is_workspace_allowed,
             workspace::probe_workspace_file,

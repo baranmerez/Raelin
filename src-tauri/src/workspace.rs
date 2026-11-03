@@ -14,7 +14,10 @@ use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_dialog::DialogExt;
 
 const EXTENSION: &str = "rli";
+/// Older builds kept only the last file here; it still seeds the recent list once.
 const LAST_FILE: &str = "last-workspace.txt";
+const RECENT_FILE: &str = "recent-workspaces.txt";
+const RECENT_LIMIT: usize = 10;
 /// Boards are small; this is room for many pictures of up to 10 MB each.
 const MAX_WORKSPACE_BYTES: u64 = 256 * 1024 * 1024;
 
@@ -158,18 +161,67 @@ fn write_atomic(path: &Path, content: impl AsRef<[u8]>) -> Result<(), String> {
     fs::rename(&tmp, path).map_err(|e| format!("{}: {e}", path.display()))
 }
 
-fn last_file_store(app: &AppHandle) -> Option<PathBuf> {
-    app.path().app_config_dir().ok().map(|d| d.join(LAST_FILE))
+fn config_file(app: &AppHandle, name: &str) -> Option<PathBuf> {
+    app.path().app_config_dir().ok().map(|d| d.join(name))
 }
 
-/// Best effort: a missing config folder only means the next start shows the example.
-fn remember_last_file(app: &AppHandle, path: &Path) {
-    if let Some(store) = last_file_store(app) {
+/// Most recent first; paths compare case-insensitively, as Windows does.
+fn push_recent(list: Vec<String>, path: &str, limit: usize) -> Vec<String> {
+    let key = path.to_lowercase();
+    let mut next = vec![path.to_owned()];
+    next.extend(list.into_iter().filter(|p| p.to_lowercase() != key));
+    next.truncate(limit);
+    next
+}
+
+/// The recent list as Raelin stored it, newest first. Only Rust writes this file, so its
+/// entries count as approved, like the last file did.
+fn read_recent(app: &AppHandle) -> Vec<String> {
+    let text = config_file(app, RECENT_FILE)
+        .and_then(|f| fs::read_to_string(f).ok())
+        .or_else(|| config_file(app, LAST_FILE).and_then(|f| fs::read_to_string(f).ok()))
+        .unwrap_or_default();
+    text.lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .map(String::from)
+        .collect()
+}
+
+/// Best effort: a missing config folder only means the next start lists no recent files.
+fn write_recent(app: &AppHandle, list: &[String]) {
+    if let Some(store) = config_file(app, RECENT_FILE) {
         if let Some(parent) = store.parent() {
             let _ = fs::create_dir_all(parent);
         }
-        let _ = fs::write(store, path.to_string_lossy().as_bytes());
+        let _ = fs::write(store, list.join("\n").as_bytes());
     }
+}
+
+fn remember_last_file(app: &AppHandle, path: &Path) {
+    let list = push_recent(read_recent(app), &path.to_string_lossy(), RECENT_LIMIT);
+    write_recent(app, &list);
+}
+
+/// A workspace name the user typed, as a plain file name without the extension.
+fn clean_file_name(name: &str) -> Result<String, String> {
+    let name = name.trim();
+    let name = name
+        .strip_suffix(&format!(".{EXTENSION}"))
+        .unwrap_or(name)
+        .trim();
+    const RESERVED: [&str; 8] = ["con", "prn", "aux", "nul", "com1", "com2", "lpt1", "lpt2"];
+    if name.is_empty() || name.chars().count() > 120 {
+        return Err("Ad boş olamaz ve en fazla 120 karakter olabilir.".into());
+    }
+    let bad_char = |c: char| c.is_control() || "<>:\"/\\|?*".contains(c);
+    if name.chars().any(bad_char)
+        || name.ends_with('.')
+        || RESERVED.contains(&name.to_lowercase().as_str())
+    {
+        return Err("Bu ad dosya adı olarak kullanılamaz.".into());
+    }
+    Ok(name.to_owned())
 }
 
 /// Native open dialog for a workspace file. Blocking dialogs must not run on the main
@@ -215,15 +267,52 @@ pub async fn pick_workspace_save(
     Ok(Some(path.to_string_lossy().into_owned()))
 }
 
+/// Recent workspace files that still exist, newest first, re-approved for this run.
+#[tauri::command]
+pub fn recent_workspaces(app: AppHandle, state: State<'_, Allowed>) -> Vec<String> {
+    read_recent(&app)
+        .into_iter()
+        .filter(|p| {
+            let path = PathBuf::from(p);
+            path.is_file() && state.allow_workspace(&path).is_ok()
+        })
+        .collect()
+}
+
 /// The last workspace file Raelin itself read or wrote, re-approved for this run.
 #[tauri::command]
 pub fn last_workspace_file(app: AppHandle, state: State<'_, Allowed>) -> Option<String> {
-    let text = fs::read_to_string(last_file_store(&app)?).ok()?;
-    let path = PathBuf::from(text.trim());
-    if !path.is_file() || state.allow_workspace(&path).is_err() {
-        return None;
+    recent_workspaces(app, state).into_iter().next()
+}
+
+/// Renames an approved workspace file inside its folder and returns the new path. An
+/// existing file with that name is never replaced.
+#[tauri::command]
+pub fn rename_workspace_file(
+    app: AppHandle,
+    state: State<'_, Allowed>,
+    path: String,
+    name: String,
+) -> Result<String, String> {
+    let from = state.check_workspace(&path)?;
+    let folder = from.parent().ok_or("Dosyanın klasörü bulunamadı.")?;
+    let to = folder.join(format!("{}.{EXTENSION}", clean_file_name(&name)?));
+    let lower = |p: &Path| p.to_string_lossy().to_lowercase();
+    // A change of letter case only is the same file on Windows.
+    if to.exists() && lower(&to) != lower(&from) {
+        return Err("Bu adda bir dosya zaten var.".into());
     }
-    Some(path.to_string_lossy().into_owned())
+    fs::rename(&from, &to).map_err(|e| format!("{}: {e}", to.display()))?;
+    state.allow_workspace(&to)?;
+    let list: Vec<String> = read_recent(&app)
+        .into_iter()
+        .filter(|p| p.to_lowercase() != lower(&from))
+        .collect();
+    write_recent(
+        &app,
+        &push_recent(list, &to.to_string_lossy(), RECENT_LIMIT),
+    );
+    Ok(to.to_string_lossy().into_owned())
 }
 
 /// The file Raelin was started with, approved for this run; `None` after the first call.
@@ -366,6 +455,29 @@ pub fn write_markdown(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn recent_list_is_newest_first_without_duplicates() {
+        let list = vec![r"C:\a.rli".to_owned(), r"C:\B.rli".to_owned()];
+        assert_eq!(
+            push_recent(list, r"C:\b.rli", 10),
+            vec![r"C:\b.rli".to_owned(), r"C:\a.rli".to_owned()]
+        );
+        let many: Vec<String> = (0..12).map(|i| format!(r"C:\{i}.rli")).collect();
+        assert_eq!(push_recent(many, r"C:\new.rli", 10).len(), 10);
+    }
+
+    #[test]
+    fn file_names_stay_plain_names() {
+        assert_eq!(
+            clean_file_name("  Proje notları.rli ").unwrap(),
+            "Proje notları"
+        );
+        assert_eq!(clean_file_name("Plan v2").unwrap(), "Plan v2");
+        for bad in ["", "   ", "a/b", r"..\x", "con", "x:y", "name.", "a*b"] {
+            assert!(clean_file_name(bad).is_err(), "{bad:?} should be rejected");
+        }
+    }
 
     #[test]
     fn decodes_percent_encoded_paths() {
