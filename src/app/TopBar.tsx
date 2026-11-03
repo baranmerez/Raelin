@@ -45,6 +45,11 @@ export function TopBar() {
         <span className="brand-dot a" />
         <span className="brand-dot b" />
       </div>
+      {import.meta.env.DEV && (
+        <span className="dev-badge" title="Geliştirme sürümü: kurulu Raelin'den ayrı çalışır">
+          DEV
+        </span>
+      )}
       <span className="top-divider" />
       <h1 className="workspace-title">{title}</h1>
       <Icon name="chevron" size={16} />

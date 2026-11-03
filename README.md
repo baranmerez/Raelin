@@ -15,8 +15,14 @@ Status: early spike. Nothing here is stable yet.
 
 ```bash
 npm install
-npm run tauri dev
+npm run desktop
 ```
+
+This starts **Raelin Dev**: a debug build with its own identity (`app.raelin.dev`), settings,
+recovery copy and MCP pipe, marked with a DEV badge. It runs next to the installed Raelin
+without touching it; a debug build started with the release config refuses to start.
+For AI clients, register the dev bridge separately, e.g.
+`claude mcp add raelin-dev -- C:\path\to\raelin\target\debug\raelin-mcp.exe`.
 
 The UI also runs in a plain browser with `npm run dev` (file save/open needs the desktop shell).
 

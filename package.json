@@ -6,6 +6,7 @@
   "license": "MIT",
   "scripts": {
     "dev": "vite",
+    "desktop": "tauri dev --config src-tauri/tauri.dev.conf.json",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "typecheck": "tsc -b",

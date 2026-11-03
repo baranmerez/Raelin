@@ -23,6 +23,17 @@ pub fn run() {
             &std::env::current_dir().unwrap_or_default(),
         )))
         .setup(|app| {
+            // The pipe crate picks the dev or release identity by build profile; a debug
+            // build started with the release config would fight the installed app.
+            let identifier = &app.config().identifier;
+            if identifier != raelin_pipe::APP_IDENTIFIER {
+                return Err(format!(
+                    "Kimlik uyuşmuyor: yapılandırma {identifier}, derleme {}. \
+                     Geliştirme sürümünü `npm run desktop` ile başlat.",
+                    raelin_pipe::APP_IDENTIFIER
+                )
+                .into());
+            }
             let host = mcp::McpHost::new(app.handle())?;
             app.manage(Arc::new(host));
             Ok(())

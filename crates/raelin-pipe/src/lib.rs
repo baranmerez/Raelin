@@ -10,9 +10,22 @@ use std::path::PathBuf;
 /// Bumped on any change to the handshake or framing.
 pub const PROTOCOL_VERSION: u32 = 1;
 
-/// Must match `identifier` in `src-tauri/tauri.conf.json`; Tauri's app config dir is
-/// `%APPDATA%\<identifier>` on Windows.
-pub const APP_IDENTIFIER: &str = "app.raelin.desktop";
+/// Must match `identifier` in `src-tauri/tauri.conf.json` (release) and
+/// `src-tauri/tauri.dev.conf.json` (debug); Tauri's app config dir is
+/// `%APPDATA%\<identifier>` on Windows. Debug builds are "Raelin Dev": their own
+/// identity, pipe and token, so they run next to the installed app and AI clients never
+/// mix the two up.
+pub const APP_IDENTIFIER: &str = if cfg!(debug_assertions) {
+    "app.raelin.dev"
+} else {
+    "app.raelin.desktop"
+};
+
+const PIPE_PREFIX: &str = if cfg!(debug_assertions) {
+    "raelin-mcp-dev-"
+} else {
+    "raelin-mcp-"
+};
 
 const TOKEN_FILE: &str = "mcp-token";
 
@@ -25,7 +38,7 @@ pub fn pipe_name() -> String {
         .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
         .collect();
     format!(
-        r"\\.\pipe\raelin-mcp-{}",
+        r"\\.\pipe\{PIPE_PREFIX}{}",
         if user.is_empty() { "user" } else { &user }
     )
 }

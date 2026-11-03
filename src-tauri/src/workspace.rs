@@ -393,11 +393,7 @@ mod tests {
                 .allow_workspace(&std::env::temp_dir().join("x.json"))
                 .is_err()
         );
-        assert!(
-            allowed
-                .allow_workspace(Path::new("relative.rli"))
-                .is_err()
-        );
+        assert!(allowed.allow_workspace(Path::new("relative.rli")).is_err());
     }
 
     #[test]
