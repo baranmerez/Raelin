@@ -1,13 +1,18 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { viewController } from "../canvas/viewController";
 import { applyOps, CommandError, isDestructive } from "../commands/apply";
+import { copyItems, itemsWithContents } from "../commands/copy";
 import { describeBoard, describeOverview, maxLimit, searchWorkspace } from "../commands/describe";
+import { findReplace } from "../commands/findReplace";
+import { recentChanges } from "../commands/history";
 import { layoutBoard } from "../commands/layout";
 import { opSchema } from "../commands/schema";
 import { boardToMarkdown } from "../model/markdown";
 import type { BoardDoc } from "../model/types";
+import { isNodeItem } from "../model/types";
 import { confirmAction } from "../platform/storage";
-import { useBoardStore } from "../state/boardStore";
+import { removeItems, useBoardStore } from "../state/boardStore";
 
 const instructions = [
   "Raelin is a canvas of boards holding flow steps (flowNode), notes, regions and edges.",
@@ -16,9 +21,13 @@ const instructions = [
   "give new nodes a ref and use refs in later ops of the same batch. Place nodes with",
   "place.after (below a node) or place.in (inside a region) instead of coordinates; then call layout",
   "to tidy a region. On STALE_REVISION re-read and retry. Deletes ask the user for confirmation.",
+  "Also: find_replace (dryRun first), copy_items between boards, rename/duplicate/delete_board,",
+  "view_board for a picture, select/focus to show the user something, recent_changes for history.",
 ].join(" ");
 
 type ToolText = { content: { type: "text"; text: string }[]; isError?: boolean };
+
+const confirmLimit = 20;
 
 function ok(value: unknown): ToolText {
   return { content: [{ type: "text", text: JSON.stringify(value) }] };
@@ -94,17 +103,58 @@ function checkRevision(id: string, expected: number) {
  * acts while nothing else has touched the board since.
  */
 function commitFromClient(id: string, next: BoardDoc, client: string, summary: string): number {
+  return commitManyFromClient([{ id, next }], client, summary)[0];
+}
+
+/** Several boards changed by one AI action: one step each, one undo button for all. */
+function commitManyFromClient(
+  changes: { id: string; next: BoardDoc }[],
+  client: string,
+  summary: string,
+): number[] {
   const store = useBoardStore.getState();
-  const revision = store.commitTo(id, next, `${client}: ${summary}`);
+  const revisions = changes.map(({ id, next }) =>
+    store.commitTo(id, next, `${client}: ${summary}`),
+  );
   store.showToast(`${client} ${summary}`, "ok", {
     label: "Geri al",
     run: () => {
       const s = useBoardStore.getState();
-      if (s.revisions[id] === revision) s.undoBoard(id);
-      else s.showToast("Geri alınamadı: bu arada panoda başka değişiklik oldu.", "error");
+      if (changes.every(({ id }, i) => s.revisions[id] === revisions[i])) {
+        for (const { id } of changes) s.undoBoard(id);
+      } else s.showToast("Geri alınamadı: bu arada panoda başka değişiklik oldu.", "error");
     },
   });
-  return revision;
+  return revisions;
+}
+
+async function confirmOrReject(message: string): Promise<void> {
+  if (!(await confirmAction(message))) {
+    throw new CommandError("REJECTED", "Kullanıcı bu değişikliği onaylamadı.");
+  }
+}
+
+/** The active board, or NO_BOARD telling the client to call focus first. */
+function activeOrFail(boardId: string | undefined) {
+  const s = useBoardStore.getState();
+  if (boardId && boardId !== s.activeBoardId) {
+    throw new CommandError(
+      "NO_BOARD",
+      `Pano açık değil: ${boardId}. Önce focus ile bu panoyu aç (açık pano: ${s.activeBoardId}).`,
+    );
+  }
+  return boardOrFail(s.activeBoardId);
+}
+
+/** ids plus regionId, all of which must exist on the board. */
+function existingIds(board: BoardDoc, ids: string[] | undefined, regionId?: string): string[] {
+  const wanted = [...(ids ?? []), ...(regionId ? [regionId] : [])];
+  const present = new Set(board.items.map((i) => i.id));
+  const missing = wanted.filter((w) => !present.has(w));
+  if (missing.length > 0) {
+    throw new CommandError("NOT_FOUND", `Öğe bulunamadı: ${missing.slice(0, 5).join(", ")}`);
+  }
+  return wanted;
 }
 
 function failWithRevision(error: unknown): ToolText {
@@ -332,6 +382,355 @@ export function createRaelinServer(): McpServer {
       const id = store.createBoard(title);
       store.showToast(`${client()} "${title}" panosunu oluşturdu.`);
       return ok({ id, revision: useBoardStore.getState().revisions[id] ?? 0 });
+    },
+  );
+
+  server.registerTool(
+    "rename_board",
+    {
+      description: "Rename a board (one undo step).",
+      inputSchema: {
+        boardId: z.string(),
+        expectedRevision: z.number().int(),
+        title: z.string().min(1).max(120),
+      },
+    },
+    async ({ boardId, expectedRevision, title }) => {
+      try {
+        const { id, board } = boardOrFail(boardId);
+        checkRevision(id, expectedRevision);
+        const clean = title.trim();
+        if (!clean) throw new CommandError("INVALID", "Pano adı boş olamaz.");
+        if (clean === board.title) return ok({ revision: expectedRevision });
+        const revision = commitFromClient(
+          id,
+          { ...board, title: clean },
+          client(),
+          `panoyu "${clean}" olarak adlandırdı`,
+        );
+        return ok({ revision });
+      } catch (error) {
+        return failWithRevision(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "duplicate_board",
+    {
+      description: "Copy a board with fresh ids, next to the original (view stays). Returns id.",
+      inputSchema: {
+        boardId: z.string(),
+        title: z.string().max(120).optional(),
+        opId: z.string().max(80).optional(),
+      },
+    },
+    async ({ boardId, title, opId }) => {
+      try {
+        const { id } = boardOrFail(boardId);
+        const key = opId ? `${id}:duplicate:${opId}` : null;
+        const hit = cached(key);
+        if (hit) return hit;
+        const store = useBoardStore.getState();
+        const copyId = store.duplicateBoard(id, { open: false, title });
+        if (!copyId) throw new CommandError("NO_BOARD", `Pano bulunamadı: ${id}`);
+        const copy = useBoardStore.getState().workspace.boards[copyId];
+        const revision = useBoardStore.getState().revisions[copyId] ?? 0;
+        store.showToast(`${client()} "${copy.title}" kopyasını oluşturdu.`, "ok", {
+          label: "Geri al",
+          run: () => {
+            const s = useBoardStore.getState();
+            if (s.revisions[copyId] === revision) s.deleteBoard(copyId);
+            else s.showToast("Geri alınamadı: kopya bu arada değişti.", "error");
+          },
+        });
+        const response = ok({ id: copyId, title: copy.title, revision });
+        remember(key, response);
+        return response;
+      } catch (error) {
+        return fail(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "delete_board",
+    {
+      description: "Delete a board (asks the user; never the last board; the user can restore).",
+      inputSchema: { boardId: z.string(), expectedRevision: z.number().int() },
+      annotations: { destructiveHint: true },
+    },
+    async ({ boardId, expectedRevision }) => {
+      try {
+        const { id, board } = boardOrFail(boardId);
+        checkRevision(id, expectedRevision);
+        const lastBoard = () => useBoardStore.getState().workspace.manifest.boards.length <= 1;
+        if (lastBoard()) throw new CommandError("INVALID", "Son pano silinemez.");
+        await confirmOrReject(
+          `${client()} "${board.title}" panosunu (${board.items.length} öğe) silmek istiyor. Onaylıyor musun?`,
+        );
+        checkRevision(id, expectedRevision);
+        if (lastBoard()) throw new CommandError("INVALID", "Son pano silinemez.");
+        const store = useBoardStore.getState();
+        const removed = store.deleteBoard(id);
+        if (!removed) throw new CommandError("NO_BOARD", `Pano bulunamadı: ${id}`);
+        store.showToast(`${client()} "${board.title}" panosunu sildi.`, "ok", {
+          label: "Geri al",
+          run: () => useBoardStore.getState().restoreBoard(removed),
+        });
+        return ok({ deleted: id, activeBoard: useBoardStore.getState().activeBoardId });
+      } catch (error) {
+        return failWithRevision(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "copy_items",
+    {
+      description:
+        "Copy ids (with region contents and edges among them) to another board with fresh ids. move:true also removes them from the source (asks the user; needs sourceRevision).",
+      inputSchema: {
+        fromBoardId: z.string(),
+        toBoardId: z.string(),
+        ids: z.array(z.string()).min(1).max(maxLimit),
+        expectedRevision: z.number().int().describe("Revision of the target board."),
+        sourceRevision: z.number().int().optional(),
+        move: z.boolean().optional(),
+        place: z
+          .object({
+            after: z.string().optional(),
+            in: z.string().optional(),
+            x: z.number().finite().optional(),
+            y: z.number().finite().optional(),
+          })
+          .optional()
+          .describe("Target spot like apply_changes place; default right of its content."),
+        opId: z.string().max(80).optional(),
+      },
+    },
+    async ({
+      fromBoardId,
+      toBoardId,
+      ids,
+      expectedRevision,
+      sourceRevision,
+      move,
+      place,
+      opId,
+    }) => {
+      try {
+        const from = boardOrFail(fromBoardId);
+        const to = boardOrFail(toBoardId);
+        const key = opId ? `${to.id}:copy:${opId}` : null;
+        const hit = cached(key);
+        if (hit) return hit;
+        if (move && from.id === to.id) {
+          throw new CommandError("INVALID", "Aynı panoda taşımak için apply_changes move kullan.");
+        }
+        if (move && sourceRevision === undefined) {
+          throw new CommandError("INVALID", "move için sourceRevision gerekli.");
+        }
+        const checkBoth = () => {
+          checkRevision(to.id, expectedRevision);
+          if (move) checkRevision(from.id, sourceRevision as number);
+        };
+        checkBoth();
+        const result = copyItems(from.board, to.board, ids, place);
+        const copied = new Set(result.copied);
+        if (move) {
+          await confirmOrReject(
+            `${client()} "${from.board.title}" panosundan ${copied.size} öğeyi "${to.board.title}" panosuna taşımak istiyor. Onaylıyor musun?`,
+          );
+          checkBoth();
+        }
+        const changes = [{ id: to.id, next: result.board }];
+        if (move) changes.push({ id: from.id, next: removeItems(from.board, copied) });
+        const [revision, newSourceRevision] = commitManyFromClient(
+          changes,
+          client(),
+          `${copied.size} öğeyi "${to.board.title}" panosuna ${move ? "taşıdı" : "kopyaladı"}`,
+        );
+        const response = ok({
+          revision,
+          ...(move ? { sourceRevision: newSourceRevision } : {}),
+          ids: result.ids,
+        });
+        remember(key, response);
+        return response;
+      } catch (error) {
+        return failWithRevision(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "find_replace",
+    {
+      description:
+        "Find/replace text in step labels, note titles/bodies, region titles, edge labels, image alt. dryRun lists matches; otherwise one atomic step (needs expectedRevision).",
+      inputSchema: {
+        boardId: z.string().optional(),
+        find: z.string().min(1).max(200),
+        replace: z.string().max(2000),
+        caseSensitive: z.boolean().optional(),
+        dryRun: z.boolean().optional(),
+        expectedRevision: z.number().int().optional(),
+        opId: z.string().max(80).optional(),
+      },
+    },
+    async ({ boardId, find, replace, caseSensitive, dryRun, expectedRevision, opId }) => {
+      try {
+        const { id, board, revision: current } = boardOrFail(boardId);
+        const key = opId && !dryRun ? `${id}:replace:${opId}` : null;
+        const hit = cached(key);
+        if (hit) return hit;
+        if (!dryRun && expectedRevision === undefined) {
+          throw new CommandError("INVALID", "Değiştirmek için expectedRevision gerekli.");
+        }
+        if (!dryRun) checkRevision(id, expectedRevision as number);
+        const result = findReplace(board, { find, replace, caseSensitive });
+        const matches = result.matches.slice(0, 50);
+        const summary = {
+          total: result.total,
+          items: result.changed.length,
+          matches,
+          ...(matches.length < result.matches.length ? { truncated: true } : {}),
+        };
+        if (dryRun || result.changed.length === 0) return ok({ revision: current, ...summary });
+        if (result.changed.length > confirmLimit) {
+          await confirmOrReject(
+            `${client()} "${board.title}" panosunda ${result.changed.length} öğede "${find}" metnini değiştirmek istiyor. Onaylıyor musun?`,
+          );
+          checkRevision(id, expectedRevision as number);
+        }
+        const revision = commitFromClient(
+          id,
+          result.board,
+          client(),
+          `${result.changed.length} öğede metni değiştirdi`,
+        );
+        const response = ok({ revision, total: result.total, changed: result.changed });
+        remember(key, response);
+        return response;
+      } catch (error) {
+        return failWithRevision(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "view_board",
+    {
+      description:
+        "PNG of the active board as the user sees it (whole, a region, or ids), longest side ≤1200 px.",
+      inputSchema: {
+        boardId: z.string().optional().describe("Must be the active board; else call focus first."),
+        regionId: z.string().optional(),
+        ids: z.array(z.string()).max(maxLimit).optional(),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    async ({ boardId, regionId, ids }) => {
+      try {
+        const { board } = activeOrFail(boardId);
+        const wanted = existingIds(board, ids, regionId);
+        const view = viewController();
+        if (!view) throw new CommandError("NO_BOARD", "Tuval hazır değil.");
+        const scope =
+          wanted.length > 0 ? new Set(itemsWithContents(board, wanted).map((i) => i.id)) : null;
+        const { renderBoardImage } = await import("../app/exportImage");
+        const url = await renderBoardImage(view.getNodes(), { kind: "png", scope, maxSide: 1200 });
+        if (!url) throw new CommandError("NOT_FOUND", "Çizilecek öğe yok.");
+        return {
+          content: [
+            {
+              type: "image" as const,
+              data: url.slice(url.indexOf(",") + 1),
+              mimeType: "image/png",
+            },
+          ],
+        };
+      } catch (error) {
+        return fail(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "select",
+    {
+      description: "Set the user's selection on the active board (empty ids clears it).",
+      inputSchema: {
+        ids: z.array(z.string()).max(maxLimit),
+        boardId: z.string().optional().describe("Must be the active board."),
+      },
+    },
+    async ({ ids, boardId }) => {
+      try {
+        const { board } = activeOrFail(boardId);
+        const present = new Set(board.items.map((i) => i.id));
+        const selected = [...new Set(ids)].filter((id) => present.has(id));
+        const missing = ids.filter((id) => !present.has(id));
+        if (ids.length > 0 && selected.length === 0) {
+          throw new CommandError("NOT_FOUND", `Öğe bulunamadı: ${missing.slice(0, 5).join(", ")}`);
+        }
+        useBoardStore.getState().setSelection(selected);
+        return ok({ selected: selected.length, ...(missing.length > 0 ? { missing } : {}) });
+      } catch (error) {
+        return fail(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "focus",
+    {
+      description:
+        "Show the user a board (switches the active board) and fit the view to ids or a region (default: whole board).",
+      inputSchema: {
+        boardId: z.string().optional(),
+        ids: z.array(z.string()).max(maxLimit).optional(),
+        regionId: z.string().optional(),
+      },
+    },
+    async ({ boardId, ids, regionId }) => {
+      try {
+        const { id, board } = boardOrFail(boardId);
+        const wanted = existingIds(board, ids, regionId);
+        const store = useBoardStore.getState();
+        const switched = store.activeBoardId !== id;
+        if (switched) store.selectBoard(id);
+        const targets = itemsWithContents(board, wanted)
+          .filter(isNodeItem)
+          .map((i) => i.id);
+        const fitted = (await viewController()?.fitToIds(targets)) ?? false;
+        return ok({ activeBoard: id, switched, fitted });
+      } catch (error) {
+        return fail(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "recent_changes",
+    {
+      description:
+        "Last undo steps of a board, newest first: who (AI label or kullanıcı), when, added/removed/changed counts.",
+      inputSchema: {
+        boardId: z.string().optional(),
+        limit: z.number().int().min(1).max(50).optional(),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    async ({ boardId, limit }) => {
+      try {
+        const { id, board, revision } = boardOrFail(boardId);
+        const past = useBoardStore.getState().history[id]?.past ?? [];
+        return ok({ revision, changes: recentChanges(past, board, limit ?? 10) });
+      } catch (error) {
+        return fail(error);
+      }
     },
   );
 
