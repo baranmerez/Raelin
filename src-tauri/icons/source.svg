@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <title>Raelin</title>
+  <!-- Raelin app icon: the two brand dots from the top bar on a warm paper tile.
+       Regenerate the icon set with `npx tauri icon src-tauri/icons/source.svg`. -->
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fffaf3"/>
+      <stop offset="1" stop-color="#f4e8dc"/>
+    </linearGradient>
+    <radialGradient id="lilac" cx="0.35" cy="0.32" r="0.75">
+      <stop offset="0" stop-color="#e6dafd"/>
+      <stop offset="1" stop-color="#a988e0"/>
+    </radialGradient>
+    <radialGradient id="coral" cx="0.35" cy="0.32" r="0.75">
+      <stop offset="0" stop-color="#ffd9cd"/>
+      <stop offset="1" stop-color="#ec7a5f"/>
+    </radialGradient>
+    <radialGradient id="blend" cx="0.5" cy="0.35" r="0.8">
+      <stop offset="0" stop-color="#d79bb6"/>
+      <stop offset="1" stop-color="#9f5f92"/>
+    </radialGradient>
+    <clipPath id="lilacShape">
+      <circle cx="404" cy="512" r="262"/>
+    </clipPath>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="18" stdDeviation="22" flood-color="#5b3a9e" flood-opacity="0.18"/>
+    </filter>
+  </defs>
+
+  <rect x="40" y="40" width="944" height="944" rx="228" fill="url(#tile)"/>
+  <rect x="40.5" y="40.5" width="943" height="943" rx="227.5" fill="none" stroke="#e7d9ca" stroke-width="3"/>
+
+  <g filter="url(#soft)">
+    <circle cx="404" cy="512" r="262" fill="url(#lilac)"/>
+    <circle cx="620" cy="512" r="262" fill="url(#coral)"/>
+    <!-- Where the dots overlap: the multiply mix of the top bar, drawn explicitly. -->
+    <circle cx="620" cy="512" r="262" fill="url(#blend)" clip-path="url(#lilacShape)"/>
+  </g>
+</svg>
