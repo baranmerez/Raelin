@@ -198,6 +198,30 @@ fn write_recent(app: &AppHandle, list: &[String]) {
     }
 }
 
+/// Renames a file but never replaces one: `fs::rename` would overwrite a file that
+/// appeared at `to` after the caller checked. A case-only rename of the same file works.
+#[cfg(windows)]
+fn move_without_replacing(from: &Path, to: &Path) -> std::io::Result<()> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Storage::FileSystem::MoveFileExW;
+    let wide = |p: &Path| -> Vec<u16> { p.as_os_str().encode_wide().chain(Some(0)).collect() };
+    let (from, to) = (wide(from), wide(to));
+    // SAFETY: both buffers are NUL-terminated UTF-16 paths that outlive the call; flags 0
+    // means no MOVEFILE_REPLACE_EXISTING.
+    if unsafe { MoveFileExW(from.as_ptr(), to.as_ptr(), 0) } == 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    Ok(())
+}
+
+#[cfg(not(windows))]
+fn move_without_replacing(from: &Path, to: &Path) -> std::io::Result<()> {
+    if to.exists() && fs::canonicalize(to)? != fs::canonicalize(from)? {
+        return Err(std::io::ErrorKind::AlreadyExists.into());
+    }
+    fs::rename(from, to)
+}
+
 fn remember_last_file(app: &AppHandle, path: &Path) {
     let list = push_recent(read_recent(app), &path.to_string_lossy(), RECENT_LIMIT);
     write_recent(app, &list);
@@ -302,7 +326,13 @@ pub fn rename_workspace_file(
     if to.exists() && lower(&to) != lower(&from) {
         return Err("Bu adda bir dosya zaten var.".into());
     }
-    fs::rename(&from, &to).map_err(|e| format!("{}: {e}", to.display()))?;
+    move_without_replacing(&from, &to).map_err(|e| {
+        if e.kind() == std::io::ErrorKind::AlreadyExists {
+            "Bu adda bir dosya zaten var.".to_string()
+        } else {
+            format!("{}: {e}", to.display())
+        }
+    })?;
     state.allow_workspace(&to)?;
     let list: Vec<String> = read_recent(&app)
         .into_iter()
@@ -465,6 +495,26 @@ mod tests {
         );
         let many: Vec<String> = (0..12).map(|i| format!(r"C:\{i}.rli")).collect();
         assert_eq!(push_recent(many, r"C:\new.rli", 10).len(), 10);
+    }
+
+    #[test]
+    fn moving_never_replaces_another_file_but_allows_a_case_change() {
+        let dir = std::env::temp_dir().join("raelin-move-test");
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let (a, b) = (dir.join("plan.rli"), dir.join("other.rli"));
+        fs::write(&a, "a").unwrap();
+        fs::write(&b, "b").unwrap();
+        let err = move_without_replacing(&a, &b).unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::AlreadyExists);
+        assert_eq!(fs::read_to_string(&b).unwrap(), "b");
+        move_without_replacing(&a, &dir.join("Plan.rli")).unwrap();
+        let names: Vec<String> = fs::read_dir(&dir)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        assert!(names.contains(&"Plan.rli".to_owned()));
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
