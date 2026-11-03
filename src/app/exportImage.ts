@@ -52,33 +52,38 @@ async function deliver(bytes: Uint8Array, name: string, kind: ImageKind): Promis
   return true;
 }
 
-/**
- * Renders the board (or the selection, with everything inside selected regions) to a
- * PNG or SVG file. Selection highlights are cleared while rendering and then restored.
- */
-export async function exportBoardImage(kind: ImageKind, nodes: Node[]): Promise<void> {
-  const store = useBoardStore.getState();
-  const board = store.workspace.boards[store.activeBoardId];
-  const viewport = document.querySelector<HTMLElement>(".react-flow__viewport");
-  if (!board || !viewport) return;
+export interface RenderOptions {
+  kind: ImageKind;
+  /** Ids to draw (with their edges); null draws the whole board. */
+  scope: ReadonlySet<string> | null;
+  /** Longest side of the picture in pixels; defaults to twice the board size. */
+  maxSide?: number;
+}
 
-  const selected = store.selectedIds;
-  const scope =
-    selected.length > 0 ? new Set(selectionItems(board, selected).map((i) => i.id)) : null;
+/**
+ * Renders the active board (or the scoped items) to a data URL, or null when nothing is
+ * in scope. Selection highlights are cleared for the few frames of rendering and then
+ * restored, unless the user selected something else meanwhile.
+ */
+export async function renderBoardImage(
+  nodes: Node[],
+  { kind, scope, maxSide }: RenderOptions,
+): Promise<string | null> {
+  const viewport = document.querySelector<HTMLElement>(".react-flow__viewport");
   const picked = scope ? nodes.filter((n) => scope.has(n.id)) : nodes;
-  if (picked.length === 0) {
-    store.showToast("Dışa aktarılacak bir şey yok.", "error");
-    return;
-  }
+  if (!viewport || picked.length === 0) return null;
 
   const bounds = getNodesBounds(picked);
   const width = Math.ceil(bounds.width + padding * 2);
   const height = Math.ceil(bounds.height + padding * 2);
-  const pixelRatio = Math.min(2, maxPixels / Math.max(width, height));
+  const pixelRatio = Math.min(2, (maxSide ?? maxPixels) / Math.max(width, height));
   const paper = getComputedStyle(document.documentElement).getPropertyValue("--paper").trim();
 
-  store.setSelection([]);
-  await nextFrame();
+  const selected = useBoardStore.getState().selectedIds;
+  if (selected.length > 0) {
+    useBoardStore.getState().setSelection([]);
+    await nextFrame();
+  }
   try {
     const options = {
       backgroundColor: paper || "#fbf7f1",
@@ -104,7 +109,30 @@ export async function exportBoardImage(kind: ImageKind, nodes: Node[]): Promise<
         return !isItem || !id || scope.has(id);
       },
     };
-    const url = kind === "png" ? await toPng(viewport, options) : await toSvg(viewport, options);
+    return kind === "png" ? await toPng(viewport, options) : await toSvg(viewport, options);
+  } finally {
+    const store = useBoardStore.getState();
+    if (selected.length > 0 && store.selectedIds.length === 0) store.setSelection(selected);
+  }
+}
+
+/**
+ * Renders the board (or the selection, with everything inside selected regions) to a
+ * PNG or SVG file.
+ */
+export async function exportBoardImage(kind: ImageKind, nodes: Node[]): Promise<void> {
+  const store = useBoardStore.getState();
+  const board = store.workspace.boards[store.activeBoardId];
+  if (!board) return;
+  const selected = store.selectedIds;
+  const scope =
+    selected.length > 0 ? new Set(selectionItems(board, selected).map((i) => i.id)) : null;
+  try {
+    const url = await renderBoardImage(nodes, { kind, scope });
+    if (!url) {
+      store.showToast("Dışa aktarılacak bir şey yok.", "error");
+      return;
+    }
     if (await deliver(dataUrlBytes(url), fileName(board.title, kind), kind)) {
       store.showToast(`${kind.toUpperCase()} kaydedildi.`);
     }
@@ -113,7 +141,5 @@ export async function exportBoardImage(kind: ImageKind, nodes: Node[]): Promise<
       `Dışa aktarılamadı: ${error instanceof Error ? error.message : String(error)}`,
       "error",
     );
-  } finally {
-    useBoardStore.getState().setSelection(selected);
   }
 }

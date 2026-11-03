@@ -32,6 +32,7 @@ import { StrokeView } from "./nodes/StrokeView";
 import { RaelinEdge } from "./RaelinEdge";
 import { ToolOverlay } from "./ToolOverlay";
 import { useClipboard } from "./useClipboard";
+import { useViewController } from "./viewController";
 import { ZoomControl } from "./ZoomControl";
 
 const nodeTypes = {
@@ -181,6 +182,7 @@ export function Canvas({ stress }: { stress: boolean }) {
   const far = useStore((s) => s.transform[2] < 0.5);
   const { nodes, edges } = useRfGraph(board, selectedIds, measured);
   useClipboard();
+  useViewController();
   const { screenToFlowPosition } = useReactFlow();
 
   /** Pictures dragged in from the file manager land where they are dropped. */
