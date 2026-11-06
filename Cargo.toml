@@ -9,3 +9,11 @@ lto = true
 opt-level = 3
 panic = "abort"
 strip = true
+
+# Debug builds: full debug info for Tauri, windows and tokio makes target/debug many GB on
+# Windows (PDBs). Our own crates keep file:line for panics and backtraces.
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = false
